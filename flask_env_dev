@@ -1,0 +1,3 @@
+# flask app variable
+export FLASK_APP=controller/app
+export FLASK_ENV=development
