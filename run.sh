@@ -1,4 +1,4 @@
 #!/bin/sh 
 
 # start server
-python controller/app.py
+python controller/app.py ./data

@@ -1,0 +1,18 @@
+{
+  "probe_gate": 8,
+  "probe_source": 1,
+  "probe_drain": 3,
+  "probe_sub": 9,
+  "v_gs": {
+    "start": -0.4,
+    "stop": 1.2,
+    "step": 0.1
+  },
+  "v_ds": {
+    "start": 0,
+    "stop": 2.0,
+    "step": 0.1
+  },
+  "direction": "fr",
+  "negate_id": false
+}

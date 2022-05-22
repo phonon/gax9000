@@ -13,7 +13,7 @@ gax9000/
 ```
 
 
-# Setup
+# Setup/Installation
 1.  Create python virtual environment
 ```
 python -m venv venv
@@ -36,6 +36,14 @@ cd frontend
 npm install
 ```
 
+# Usage
+First run server using script
+```
+./run.sh 
+```
+This will by default use `./data` as the real instance data folder.
+The first time the server is run, it will copy default config files
+in `controller/assets/` into the data folder.
 
 # Architecture
 Python backend controller manages the instrument GPIB connections

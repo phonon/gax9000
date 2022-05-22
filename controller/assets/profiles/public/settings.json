@@ -1,0 +1,13 @@
+{
+    "gpibB1500": 16,
+    "gpibCascade": 22,
+    "die_size_x": 10000,
+    "die_size_y": 10000,
+    "die_offset_x": 0,
+    "die_offset_y": 0,
+    "current_die_x": 0,
+    "current_die_y": 0,
+    "device_x": 0,
+    "device_y": 0,
+    "data_folder": ""
+}

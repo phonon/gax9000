@@ -6,3 +6,6 @@ __pycache__
 
 # virtual env
 venv
+
+# standard data folder for running server
+data

@@ -130,9 +130,10 @@ export const WaferControls = (props) => {
                             <Grid item xs={6} align="center">
                                 <TextField
                                     fullWidth
-                                    label="DieY"
+                                    label="Device Y"
                                     variant="outlined"
                                     size="small"
+                                    defaultValue="0"
                                 />
                             </Grid>
                             <Grid item xs={9}/>
@@ -164,9 +165,10 @@ export const WaferControls = (props) => {
                             <Grid item xs={6}>
                                 <TextField
                                     fullWidth
-                                    label="DieX"
+                                    label="Device X"
                                     variant="outlined"
                                     size="small"
+                                    defaultValue="0"
                                 />
                             </Grid>
 
