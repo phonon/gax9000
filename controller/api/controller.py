@@ -1,7 +1,13 @@
+"""
+Controller API
+
+Handle read/write wafer and controller config from client ui.
+"""
 import time
 from flask_restful import Api, Resource, reqparse
 
-class HelloApiHandler(Resource):
+
+class ControllerApiHandler(Resource):
     def get(self):
         print("SLEEP?")
         time.sleep(4)

@@ -37,17 +37,15 @@ const DEFAULT_MEASUREMENT_CONFIG = `{
 }`;
 
 function App() {
-    const [getMessage, setGetMessage] = useState({});
     const [gpibB1500, setGpibB1500] = useState(16);
     const [gpibCascade, setGpibCascade] = useState(22);
     const [measurementProfile, setMeasurementProfile] = useState("public");
     const [measurementProgram, setMeasurementProgram] = useState("");
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
-    useEffect(()=>{
-        axios.get("http://localhost:5000/flask/hello").then(response => {
+    useEffect(() => {
+        axios.get("http://localhost:9000/api/controller").then(response => {
             console.log("SUCCESS", response)
-            setGetMessage(response)
         }).catch(error => {
             console.log(error)
         })
