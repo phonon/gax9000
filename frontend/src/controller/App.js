@@ -40,16 +40,62 @@ function App({
 }) {
     const [gpibB1500, setGpibB1500] = useState(16);
     const [gpibCascade, setGpibCascade] = useState(22);
+    const [instrB1500Identification, setInstrB1500Identification] = useState(" ");
+    const [instrCascadeIdentification, setInstrCascadeIdentification] = useState(" ");
+
     const [measurementProfile, setMeasurementProfile] = useState("public");
     const [measurementProgram, setMeasurementProgram] = useState("");
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     useEffect(() => {
+        console.log("USE EFFECT!!!");
+
         axios.get("api/controller").then(response => {
             console.log("SUCCESS", response)
         }).catch(error => {
             console.log(error)
         })
+
+        // backend api event response handlers
+        const responseHandlers = new Map();
+        responseHandlers.set("connect_b1500_idn", ({idn}) => {
+            setInstrB1500Identification(idn);
+        })
+        responseHandlers.set("disconnect_b1500", ({}) => {
+            setInstrB1500Identification(" ");
+        })
+        responseHandlers.set("connect_cascade_idn", ({idn}) => {
+            setInstrCascadeIdentification(idn);
+        })
+        responseHandlers.set("disconnect_cascade", ({idn}) => {
+            setInstrCascadeIdentification(" ");
+        })
+        
+        // event channel for backend SSE events
+        const eventSrc = new EventSource(axios.defaults.baseURL + "/event/controller");
+        eventSrc.onmessage = (e) => {
+            try {
+                const response = JSON.parse(e.data);
+                console.log("RESPONSE", response);
+                if ( responseHandlers.has(response.msg) ) {
+                    responseHandlers.get(response.msg)(response.data);
+                } else {
+                    console.error("Invalid response msg:", response)
+                }
+            } catch ( error ) {
+                console.error(error);
+            }
+        };
+
+        eventSrc.onerror = (e) => {
+            console.error(e);
+            eventSrc.close();
+        };
+
+        // clean up event channel
+        return () => {
+            eventSrc.close();
+        };
     }, []);
 
 
@@ -76,7 +122,7 @@ function App({
                                     label="B1500 Parameter Analyzer"
                                     address={gpibB1500}
                                     setAddress={setGpibB1500}
-                                    identification=" "
+                                    identification={instrB1500Identification}
                                     addressRange={GPIB_ADDRESS_RANGE}
                                     connectMsg={"connect_b1500"}
                                     disconnectMsg={"disconnect_b1500"}
@@ -89,7 +135,7 @@ function App({
                                     label="Cascade Probe Station"
                                     address={gpibCascade}
                                     setAddress={setGpibCascade}
-                                    identification=" "
+                                    identification={instrCascadeIdentification}
                                     addressRange={GPIB_ADDRESS_RANGE}
                                     connectMsg={"connect_cascade"}
                                     disconnectMsg={"disconnect_cascade"}

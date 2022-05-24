@@ -65,17 +65,37 @@ class ControllerApiHandler(Resource):
     
     def connect_b1500(self, gpib_address):
         idn = self.controller.connect_b1500(gpib_address)
-        print(idn)
+        print(f"Connected (GPIB: {gpib_address}): {idn}")
+        self.channel.publish({
+            "msg": "connect_b1500_idn",
+            "data": {
+                "idn": idn,
+            },
+        })
 
     def disconnect_b1500(self):
         self.controller.disconnect_b1500()
+        self.channel.publish({
+            "msg": "disconnect_b1500",
+            "data": {},
+        })
 
     def connect_cascade(self, gpib_address):
         idn = self.controller.connect_cascade(gpib_address)
-        print(idn)
+        print(f"Connected (GPIB: {gpib_address}): {idn}")
+        self.channel.publish({
+            "msg": "connect_cascade_idn",
+            "data": {
+                "idn": idn,
+            },
+        })
     
     def disconnect_cascade(self):
         self.controller.disconnect_cascade()
+        self.channel.publish({
+            "msg": "disconnect_cascade",
+            "data": {},
+        })
     
     def get(self):
         # print("SLEEP?")

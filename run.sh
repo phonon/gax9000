@@ -14,7 +14,7 @@ function fix_slash_on_windows() {
     echo "$result"
 }
 
-# create data directory if it does not exist
+# create directory for ssl certificates if it does not exist
 DIR_DATA=./data/ssl
 if [ ! -d "$DIR_DATA" ]; then
     echo "CREATING DATA DIRECTORY: $DIR_DATA"
