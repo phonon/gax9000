@@ -1,28 +1,62 @@
 import os
 import json
 import numpy as np
+import pyvisa
 from flask import Flask, send_from_directory
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS # disable on deployment
 # from api.HelloApiHandler import HelloApiHandler
 import sse
-
 from flask import Flask, request
 from gevent.pywsgi import WSGIServer
 import gevent
 
 from api import ControllerApiHandler, MonitorApiHandler
 
+
+class Controller():
+    def __init__(self):
+        """Singleton controller for managing instrument resources.
+        """
+        # py visa resource manager
+        self.resource_manager = pyvisa.ResourceManager()
+        # b1500 parameter analyzer instrument
+        self.instrument_b1500 = None
+        # cascade instrument
+        self.instrument_cascade = None
+
+    def connect_b1500(self, gpib):
+        """Connect to b1500 instrument resource through GPIB
+        and return identification string."""
+        addr = f"GPIB0::{gpib}::INSTR"
+        self.instrument_b1500 = self.resource_manager.open_resource(addr)
+        return self.instrument_b1500.query("*IDN?")
+
+    def connect_cascade(self, gpib):
+        """Connect to cascade instrument resource through GPIB
+        and return identification string."""
+        addr = f"GPIB0::{gpib}::INSTR"
+        self.instrument_cascade = self.resource_manager.open_resource(addr)
+        return self.instrument_cascade.query("*IDN?")
+
+
 def create_server(
     config,
+    cors=True,
 ):
     """Create controller server and controller state.
     """
     # unpack required config options
     profiles = config["profiles"] # available measurement profiles
 
+    # pyvisa controller
+    controller = Controller()
+
+    # flask web server as controller api interface
     app = Flask(__name__)
-    CORS(app)
+
+    if cors:
+        CORS(app)
 
     # event channel
     channel = sse.Channel()
