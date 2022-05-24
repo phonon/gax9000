@@ -93,31 +93,39 @@ def run(
     """
 
     print(f"Data path: \"{data_path}\"")
+
     # create data folder if does not exist
-    if not os.path.exists(data_path):
+    path_config = os.path.join(data_path, "config.json")
+    if not os.path.exists(path_config):
         import shutil
         shutil.copytree(
             src=os.path.join("controller", "assets"),
             dst=data_path,
+            dirs_exist_ok=True,
         )
         print(f"Generating new default config in data path: \"{data_path}\"")
 
     # load profiles
-    with open(os.path.join(data_path, "config.json"), "r") as f:
+    with open(path_config, "r") as f:
         config = json.load(f)
     
     # create and run server app
     app = create_server(
         config,
     )
-    server = WSGIServer(("", port), app)
+
+    # ssl cert.pem and key.pem file paths
+    path_cert = os.path.join(data_path, "ssl", "cert.pem")
+    path_key = os.path.join(data_path, "ssl", "key.pem")
+
+    server = WSGIServer(("", port), app, certfile=path_cert, keyfile=path_key)
     print(f"Listening on port: {port}")
     server.serve_forever()
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Run training on neural net model")
+    parser = argparse.ArgumentParser(description="Run gax controller server.")
 
     parser.add_argument(
         "data_path",

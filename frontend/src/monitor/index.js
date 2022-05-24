@@ -7,7 +7,7 @@ const Monitor = () => {
     let [y, setY] = useState([3, 2, 1, 0])
 
     useEffect(() => {
-        var eventSrc = new EventSource("http://localhost:5000/subscribe");
+        var eventSrc = new EventSource("https://localhost:9000/subscribe");
         eventSrc.onmessage = (e) => {
             console.log(e.data);
             const data = JSON.parse(e.data);
@@ -34,12 +34,12 @@ const Monitor = () => {
                 {
                     x: x,
                     y: y,
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    marker: {color: 'red'},
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: "red"},
                 },
                 ]}
-                layout={ {width: 600, height: 400, title: 'A Fancy Plot'} }
+                layout={ {width: 600, height: 400, title: "A Fancy Plot"} }
             />
         </div>
     )

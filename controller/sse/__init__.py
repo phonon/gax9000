@@ -65,10 +65,16 @@ class Channel(object):
         def gen(last_id) -> Iterator[str]:
             for sse in self.event_generator(last_id):
                 yield sse.encode()
-        return Response(
-            gen(request.headers.get('Last-Event-ID')),
-            mimetype="text/event-stream")
+        res = Response(
+            gen(request.headers.get("Last-Event-ID")),
+            mimetype="text/event-stream",
+        )
+        res.headers["Content-Type"] = "text/event-stream;charset=utf-8"
+        res.headers["Cache-Control"] = "no-cache, no-transform"
+        res.headers["Connection"] = "keep-alive"
 
+        return res
+    
     def _add_history(self, q, last_id):
         add = False
         for sse in self.history:

@@ -18,6 +18,14 @@ class ControllerApiHandler(Resource):
             "message": "Hello Api Handler",
         }
 
+    def put(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("type", type=str)
+        parser.add_argument("message", type=str)
+
+        args = parser.parse_args()
+        
+
     def post(self):
         print(self)
 

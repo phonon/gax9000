@@ -44,7 +44,7 @@ function App() {
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     useEffect(() => {
-        axios.get("http://localhost:9000/api/controller").then(response => {
+        axios.get("https://localhost:9000/api/controller").then(response => {
             console.log("SUCCESS", response)
         }).catch(error => {
             console.log(error)

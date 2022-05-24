@@ -51,3 +51,16 @@ and acts as a web server. The javascript frontend both acts to
 update backend controller settings and run measurements, and 
 reads real-time signals from controller web server (using SSE) and
 reports measurement results.
+
+# Issues
+## Antivirus blocking SSE
+Sophos antivirus (used by MIT) blocks SSE in python web apps from
+regular http requests. It treats the SSE stream as a download that
+needs to be scanned. It waits until a 2 MB block is downloaded before
+scanning...issue is SSE events are small and unlikely to fill the 2 MB
+buffer. There are 2 solutions
+1.  Send a single 2 MB block before first event (to break through
+    Sophos cancer).
+2.  Use https (SSL/TLS)
+
+https://stackoverflow.com/questions/62129788/on-a-machine-running-sophos-why-do-all-my-browsers-fail-to-receive-server-sent
