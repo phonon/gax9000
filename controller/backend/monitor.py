@@ -1,13 +1,18 @@
 """
-Controller API
+Monitor API
 
-Handle read/write wafer and controller config from client ui.
+Handle viewing and sending current measurement data results
+to client monitor.
 """
 import time
 from flask_restful import Api, Resource, reqparse
 
 
-class ControllerApiHandler(Resource):
+class MonitorApiHandler(Resource):
+    def __init__(self, channel):
+        # SSE event channel for pushing data responses to frontend
+        self.channel = channel
+    
     def get(self):
         print("SLEEP?")
         time.sleep(4)
@@ -17,14 +22,6 @@ class ControllerApiHandler(Resource):
             "resultStatus": "SUCCESS",
             "message": "Hello Api Handler",
         }
-
-    def put(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument("type", type=str)
-        parser.add_argument("message", type=str)
-
-        args = parser.parse_args()
-        
 
     def post(self):
         print(self)

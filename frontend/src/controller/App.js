@@ -1,6 +1,5 @@
 import "./css/app.css";
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import {
     Box,
     Button, 
@@ -36,7 +35,9 @@ const DEFAULT_MEASUREMENT_CONFIG = `{
   "v_ds": [-0.05, -0.4, -1.2],
 }`;
 
-function App() {
+function App({
+    axios, // axios instance
+}) {
     const [gpibB1500, setGpibB1500] = useState(16);
     const [gpibCascade, setGpibCascade] = useState(22);
     const [measurementProfile, setMeasurementProfile] = useState("public");
@@ -44,12 +45,13 @@ function App() {
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     useEffect(() => {
-        axios.get("https://localhost:9000/api/controller").then(response => {
+        axios.get("api/controller").then(response => {
             console.log("SUCCESS", response)
         }).catch(error => {
             console.log(error)
         })
     }, []);
+
 
     return (
         <Container maxWidth="md">
@@ -70,21 +72,27 @@ function App() {
                         >
                             <Grid item xs={6}>
                                 <InstrumentConnection
+                                    axios={axios}
                                     label="B1500 Parameter Analyzer"
                                     address={gpibB1500}
                                     setAddress={setGpibB1500}
                                     identification=" "
                                     addressRange={GPIB_ADDRESS_RANGE}
+                                    connectMsg={"connect_b1500"}
+                                    disconnectMsg={"disconnect_b1500"}
                                 />
                             </Grid>
 
                             <Grid item xs={6}>
                                 <InstrumentConnection
+                                    axios={axios}
                                     label="Cascade Probe Station"
                                     address={gpibCascade}
                                     setAddress={setGpibCascade}
                                     identification=" "
                                     addressRange={GPIB_ADDRESS_RANGE}
+                                    connectMsg={"connect_cascade"}
+                                    disconnectMsg={"disconnect_cascade"}
                                 />
                             </Grid>
                         </Grid>

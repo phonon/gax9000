@@ -30,7 +30,12 @@ source venv/Scripts/active
 pip install -r requirements.txt
 ```
 
-4. Install frontend packages
+4.  Install controller backend as a pip package (required for scripts to find `controller` as dependency):
+```
+pip install -e .
+```
+
+5. Install frontend web ui packages
 ```
 cd frontend
 npm install
@@ -64,3 +69,7 @@ buffer. There are 2 solutions
 2.  Use https (SSL/TLS)
 
 https://stackoverflow.com/questions/62129788/on-a-machine-running-sophos-why-do-all-my-browsers-fail-to-receive-server-sent
+
+## Generating self-signed SSL Certificate
+See:
+https://security.stackexchange.com/questions/74345/provide-subjectaltname-to-openssl-directly-on-the-command-line/198409#198409

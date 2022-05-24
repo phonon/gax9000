@@ -1,20 +1,42 @@
 import {
-    Button, 
-    Container,
-    Divider,
+    Button,
     FormControl,
     Grid,
-    IconButton,
     InputLabel,
     MenuItem,
     Select,
     TextField,
 } from "@mui/material";
 
+const handleBtnConnect = (axios, msg, address) => {
+    axios.put("api/controller", {
+        msg: msg,
+        data: {
+            gpib_address: address,
+        },
+    });
+}
+
+const handleBtnDisconnect = (axios, msg) => {
+    axios.put("api/controller", {
+        msg: msg,
+        data: {},
+    });
+}
+
 /**
  * Instrument GPIB connection bar
  */
-export const InstrumentConnection = (props) => {
+export const InstrumentConnection = ({
+    axios,          // axios instance
+    label,          // label in connection text field
+    identification, // identification name of instrument after connecting
+    address,        // gpib address setting
+    setAddress,     // setter for gpib address
+    addressRange,   // range of valid gpib addresses
+    connectMsg,     // msg for connecting to instrument
+    disconnectMsg,  // msg for disconnecting current instrument
+}) => {
     
     return (
         <Grid
@@ -27,10 +49,10 @@ export const InstrumentConnection = (props) => {
                 <TextField
                     fullWidth
                     id="outlined-basic"
-                    label={props.label}
+                    label={label}
                     variant="outlined"
                     size="small"
-                    value={props.identification}
+                    value={identification}
                     InputProps={{
                         readOnly: true,
                     }}
@@ -42,12 +64,12 @@ export const InstrumentConnection = (props) => {
                 <FormControl fullWidth size="small">
                     <InputLabel size="small">GPIB</InputLabel>
                     <Select
-                        value={props.address}
+                        value={address}
                         label="GPIB"
                         size="small"
-                        onChange={(e) => props.setAddress(e.target.value)}
+                        onChange={(e) => setAddress(e.target.value)}
                     >
-                        {props.addressRange.map((address) =>
+                        {addressRange.map((address) =>
                             <MenuItem
                                 key={address}
                                 value={address}
@@ -66,6 +88,7 @@ export const InstrumentConnection = (props) => {
                     variant="outlined"
                     size="large"
                     sx={{width: "100%", minWidth: "0px"}}
+                    onClick={() => handleBtnConnect(axios, connectMsg, address)}
                 >
                     🡱
                 </Button>
@@ -78,6 +101,7 @@ export const InstrumentConnection = (props) => {
                     variant="outlined"
                     size="large"
                     sx={{width: "100%", minWidth: "0px"}}
+                    onClick={() => handleBtnDisconnect(axios, disconnectMsg)}
                 >
                     ✖
                 </Button>

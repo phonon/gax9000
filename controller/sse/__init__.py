@@ -39,7 +39,7 @@ class ServerSentEvent(object):
         return "{}\n\n".format("\n".join(lines))
 
 
-class Channel(object):
+class EventChannel(object):
     def __init__(self, history_size=32):
         self.subscriptions = []
         self.history = deque(maxlen=history_size)
