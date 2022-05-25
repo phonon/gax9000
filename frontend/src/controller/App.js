@@ -43,18 +43,28 @@ function App({
     const [instrB1500Identification, setInstrB1500Identification] = useState(" ");
     const [instrCascadeIdentification, setInstrCascadeIdentification] = useState(" ");
 
-    const [measurementUsers, setMeasurementUsers] = useState([]);
-    const [measurementProfile, setMeasurementProfile] = useState("");
+    const [measurementUserList, setMeasurementUserList] = useState([]);
+    const [measurementUser, setMeasurementUser] = useState("");
     const [measurementProgram, setMeasurementProgram] = useState("");
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
+    // user die settings
+    const [dieSizeX, setDieSizeX] = useState(0);
+    const [dieSizeY, setDieSizeY] = useState(0);
+    const [dieOffsetX, setDieOffsetX] = useState(0);
+    const [dieOffsetY, setDieOffsetY] = useState(0);
+    const [currentDieX, setCurrentDieX] = useState(0);
+    const [currentDieY, setCurrentDieY] = useState(0);
+    const [deviceX, setDeviceX] = useState(0);
+    const [deviceY, setDeviceY] = useState(0);
+    
     useEffect(() => {
         console.log("<App> USE EFFECT!");
 
         axios.get("api/controller").then(response => {
             setGpibB1500(response.data.gpib_b1500);
             setGpibCascade(response.data.gpib_cascade);
-            setMeasurementUsers(response.data.users);
+            setMeasurementUserList(response.data.users);
         }).catch(error => {
             console.log(error)
         });
@@ -73,8 +83,16 @@ function App({
         responseHandlers.set("disconnect_cascade", ({}) => {
             setInstrCascadeIdentification(" ");
         });
-        responseHandlers.set("set_user_settings", (settings) => {
-            console.log("set_user_settings", settings)
+        responseHandlers.set("set_user_settings", ({settings}) => {
+            console.log("set_user_settings", settings, settings.die_size_x);
+            setDieSizeX(settings.die_size_x);
+            setDieSizeY(settings.die_size_y);
+            setDieOffsetX(settings.die_offset_x);
+            setDieOffsetY(settings.die_offset_y);
+            setCurrentDieX(settings.current_die_x);
+            setCurrentDieY(settings.current_die_y);
+            setDeviceX(settings.device_x);
+            setDeviceY(settings.device_y);
         });
         
         // event channel for backend SSE events
@@ -160,6 +178,23 @@ function App({
                 <Grid item sx={{width: "100%"}}>
                     <WaferControls
                         axios={axios}
+                        user={measurementUser}
+                        dieSizeX={dieSizeX}
+                        setDieSizeXLocal={setDieSizeX}
+                        dieSizeY={dieSizeY}
+                        setDieSizeYLocal={setDieSizeY}
+                        dieOffsetX={dieOffsetX}
+                        setDieOffsetXLocal={setDieOffsetX}
+                        dieOffsetY={dieOffsetY}
+                        setDieOffsetYLocal={setDieOffsetY}
+                        currentDieX={currentDieX}
+                        setCurrentDieXLocal={setCurrentDieX}
+                        currentDieY={currentDieY}
+                        setCurrentDieYLocal={setCurrentDieY}
+                        deviceX={deviceX}
+                        setDeviceXLocal={setDeviceX}
+                        deviceY={deviceY}
+                        setDeviceYLocal={setDeviceY}
                     />
                 </Grid>
 
@@ -170,9 +205,9 @@ function App({
                 <Grid item sx={{width: "100%"}}>
                     <MeasurementControls
                         axios={axios}
-                        users={measurementUsers}
-                        profile={measurementProfile}
-                        setProfileLocal={setMeasurementProfile}
+                        userList={measurementUserList}
+                        user={measurementUser}
+                        setUserLocal={setMeasurementUser}
                         program={measurementProgram}
                         setProgramLocal={setMeasurementProgram}
                         config={measurementConfig}

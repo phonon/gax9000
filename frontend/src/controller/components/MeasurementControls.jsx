@@ -15,14 +15,14 @@ import CodeMirror from  "@uiw/react-codemirror";
 import { json as codeMirrorJsonExtension } from "@codemirror/lang-json";
 
 
-const handleSetUserProfile = (axios, username, setProfileLocal) => {
+const handleSetUserProfile = (axios, username, setUserLocal) => {
     axios.put("api/controller", {
         msg: "get_user_settings",
         data: {
             user: username,
         },
     });
-    setProfileLocal(username);
+    setUserLocal(username);
 }
 
 /**
@@ -30,9 +30,9 @@ const handleSetUserProfile = (axios, username, setProfileLocal) => {
  */
 export const MeasurementControls = ({
     axios,
-    users,
-    profile,
-    setProfileLocal,
+    userList,
+    user,
+    setUserLocal,
     program,
     setProgramLocal,
     config,
@@ -47,7 +47,7 @@ export const MeasurementControls = ({
             alignItems="center"
         >
             <Grid item sx={{width: "100%"}}>
-                <Box id="measurement-profile" sx={{width: "100%"}} >
+                <Box id="measurement-user" sx={{width: "100%"}} >
                     <Grid
                         container
                         spacing={1}
@@ -55,17 +55,17 @@ export const MeasurementControls = ({
                     >
                         <Grid item xs={2}>
                         <FormControl fullWidth size="small">
-                            <InputLabel id="measurement-profile-select-label" size="small">Profile</InputLabel>
+                            <InputLabel id="measurement-user-select-label" size="small">Profile</InputLabel>
                             <Select
-                                id="measurement-profile-select"
-                                labelId="measurement-profile-select-label"
-                                value={profile}
-                                label="Profile"
+                                id="measurement-user-select"
+                                labelId="measurement-user-select-label"
+                                value={user}
+                                label="User"
                                 size="small"
-                                onChange={(e) => handleSetUserProfile(axios, e.target.value, setProfileLocal)}
+                                onChange={(e) => handleSetUserProfile(axios, e.target.value, setUserLocal)}
                             >
-                                {users.map((user) =>
-                                    <MenuItem key={user} value={user}>{user}</MenuItem>
+                                {userList.map((u) =>
+                                    <MenuItem key={u} value={u}>{u}</MenuItem>
                                 )}
                             </Select>
                         </FormControl>

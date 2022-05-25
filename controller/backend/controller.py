@@ -8,13 +8,14 @@ import os
 import logging
 import traceback
 import json
+import gevent
 import pyvisa
 from flask_restful import Api, Resource, reqparse
 from controller.sse import EventChannel
 
 
-class UserProfile():
-    """Saved user settings."""
+class UserGlobalSettings():
+    """Saved user global config settings."""
     def __init__(
         self,
         username,
@@ -41,7 +42,7 @@ class UserProfile():
     
     def default(username):
         """Default settings."""
-        return UserProfile(
+        return UserGlobalSettings(
             username=username,
             die_size_x=10000,
             die_size_y=10000,
@@ -54,6 +55,109 @@ class UserProfile():
             data_folder="",
         )
 
+
+class UserProfile():
+    """Contain all user settings. Used as an intermediate cache
+    before periodically saving dirty settings to disk."""
+    def __init__(
+        self,
+        global_settings,
+        program_settings = {},
+        measurement_settings = {}
+    ):
+        self.global_settings = global_settings
+        self.program_settings = program_settings
+        self.measurement_settings = measurement_settings
+        self.dirty_global_settings = False
+        self.dirty_program_settings = set()     # set of dirty program name strings
+        self.dirty_measurement_settings = set() # set of dirty measurement sweep name strings
+    
+    def default(username):
+        """Create user profile with default settings."""
+        return UserProfile(
+            global_settings=UserGlobalSettings.default(username),
+            program_settings={}, # TODO
+            measurement_settings={}, # TODO
+        )
+    
+    def save(self, path):
+        """Save settings to path.
+        Inputs:
+        - path: Folder containing all individual user folders, e.g. "settings/users/".
+        Returns:
+        - True if any settings were dirty and saved, False if not.
+        """
+        path_user = os.path.join(path, self.global_settings.username)
+        os.makedirs(path_user, exist_ok=True)
+
+        did_update = False
+
+        path_global_settings = os.path.join(path_user, "settings.json")
+        path_program_settings_dir = os.path.join(path_user, "programs")
+        path_measurement_settings_dir = os.path.join(path_user, "measurements")
+
+        if self.dirty_global_settings or not os.path.exists(path_global_settings):
+            with open(path_global_settings, "w+") as f:
+                json.dump(self.global_settings.__dict__, f, indent=2)
+            did_update = True
+
+        # NOTE: here we only save names of program and measurement settings
+        # that were dirty (as in used by the user). So these are all lazily saved.
+        # If the user never uses a program, its settings will never be saved.
+        
+        if len(self.dirty_program_settings) > 0:
+            if not os.path.exists(path_program_settings_dir):
+                os.makedirs(path_program_settings_dir, exist_ok=True)
+            
+            for program_name, program_settings in self.program_settings.items():
+                # TODO
+                pass
+            did_update = True
+            
+        if len(self.dirty_measurement_settings) > 0:
+            if not os.path.exists(path_measurement_settings_dir):
+                os.makedirs(path_measurement_settings_dir, exist_ok=True)
+            
+            for measurement_name, measurement_settings in self.measurement_settings.items():
+                # TODO
+                pass
+            did_update = True
+        
+        # clear dirty flags
+        self.dirty_global_settings = False
+        self.dirty_program_settings = set()
+        self.dirty_measurement_settings = set()
+        
+        return did_update
+
+    def load(path_users, username):
+        """Return new user profile settings object from data in path.
+        If files are missing, this will create default settings objects.
+        Inputs:
+        - path_users: Folder for all users, e.g. "settings/users/"
+        - username: Name of user to load settings for. User settings path
+            is by joining `path_users + username`.
+        """
+        # derive username from directory in path
+        path = os.path.join(path_users, username)
+
+        path_global_settings = os.path.join(path, "settings.json")
+        path_program_settings_dir = os.path.join(path, "programs")
+        path_measurement_settings_dir = os.path.join(path, "measurements")
+        
+        if os.path.exists(path_global_settings):
+            with open(path_global_settings, "r") as f:
+                global_settings = UserGlobalSettings(**json.load(f))
+        else:
+            global_settings = UserGlobalSettings.default(username)
+        
+        return UserProfile(
+            global_settings=global_settings,
+            program_settings={}, # TODO
+            measurement_settings={}, # TODO
+        )
+        
+        
 
 class ControllerSettings():
     """Global controller settings. These are saved each time
@@ -100,7 +204,9 @@ class Controller():
         self.path_users = path_users
         # user settings, maps username: str => UserProfile: class
         self.users = {}
-
+        # repeating task to save user settings
+        self.task_save_user_settings = gevent.spawn(self._task_save_user_settings)
+    
     def load_settings(self):
         """Load controller settings from file."""
         with open(self.path_settings, "r") as f:
@@ -119,18 +225,40 @@ class Controller():
         """
         if username not in self.users:
             path_user = os.path.join(self.path_users, username)
-            path_user_settings = os.path.join(path_user, "settings.json")
-            if os.path.exists(path_user_settings):
-                with open(path_user_settings, "r") as f:
-                    self.users[username] = UserProfile(**json.load(f))
+            if os.path.exists(path_user):
+                self.users[username] = UserProfile.load(self.path_users, username)
             else: # generate default user settings
-                logging.info(f"Creating default user settings for {username} at: {path_user_settings}")
+                logging.info(f"Creating default user settings for {username} at: {path_user}")
                 self.users[username] = UserProfile.default(username)
-                os.makedirs(path_user, exist_ok=True)
-                with open(path_user_settings, "w+") as f:
-                    json.dump(self.users[username].__dict__, f, indent=2)
+                self.users[username].save(self.path_users)
         
-        return self.users[username]
+        return self.users[username].global_settings
+
+    def save_user_settings(self):
+        """Saves dirty user settings to .json files storage."""
+        for username, user in self.users.items():
+            if user.save(self.path_users):
+                logging.info(f"Saved user settings: {username}")
+        
+    def _task_save_user_settings(self):
+        """Internal task that runs in gevent greenlet to periodically
+        save dirty user settings."""
+        while True:
+            self.save_user_settings()
+            gevent.sleep(10.0) # currently hardcoded save every 10s
+    
+    def set_user_setting(self, user, setting, value):
+        """Set user global setting.
+        This will mark the user settings as dirty.
+        """
+        if user in self.users:
+            if hasattr(self.users[user].global_settings, setting):
+                self.users[user].global_settings.__setattr__(setting, value)
+                self.users[user].dirty_global_settings = True
+            else:
+                logging.warn(f"set_user_setting() Invalid setting: {setting}")
+        else:
+            logging.warn(f"set_user_setting() Invalid user: {user}")
 
     def connect_b1500(self, gpib: int):
         """Connect to b1500 instrument resource through GPIB
@@ -173,6 +301,7 @@ class ControllerApiHandler(Resource):
             "connect_cascade": self.connect_cascade,
             "disconnect_cascade": self.disconnect_cascade,
             "get_user_settings": self.get_user_settings,
+            "set_user_setting": self.set_user_setting,
         }
     
     def connect_b1500(self, gpib_address):
@@ -228,6 +357,10 @@ class ControllerApiHandler(Resource):
                 "settings": user_settings.__dict__,
             },
         })
+    
+    def set_user_setting(self, user, setting, value):
+        """Update a user setting to new value."""
+        self.controller.set_user_setting(user, setting, value)
     
     def get(self):
         """Returns global controller config settings."""

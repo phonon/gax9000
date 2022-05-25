@@ -23,10 +23,7 @@ def save_default_settings(path_settings):
     os.makedirs(path_users, exist_ok=True)
 
     for username in controller_settings.users:
-        path_user = os.path.join(path_users, username)
-        os.makedirs(path_user, exist_ok=True)
-        with open(os.path.join(path_user, "settings.json"), "w+") as f:
-            json.dump(UserProfile.default(username).__dict__, f, indent=2)
+        UserProfile.default(username).save(path_users)
 
 
 def create_server(
