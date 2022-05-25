@@ -10,20 +10,47 @@ from flask import Flask, request
 from gevent.pywsgi import WSGIServer
 import gevent
 
-from backend import Controller, ControllerApiHandler, MonitorApiHandler
+from backend import Controller, ControllerSettings, ControllerApiHandler, UserProfile, MonitorApiHandler
+
+
+def save_default_settings(path_settings):
+    """Create default setting files in data path."""
+    controller_settings = ControllerSettings.default()
+    with open(os.path.join(path_settings, "config.json"), "w+") as f:
+        json.dump(controller_settings.__dict__, f, indent=2)
+    
+    # save default individual user settings
+    path_users = os.path.join(path_settings, "users")
+    os.makedirs(path_users, exist_ok=True)
+
+    for username in controller_settings.users:
+        path_user = os.path.join(path_users, username)
+        os.makedirs(path_user, exist_ok=True)
+        with open(os.path.join(path_user, "settings.json"), "w+") as f:
+            json.dump(UserProfile.default(username).__dict__, f, indent=2)
 
 
 def create_server(
-    config,
+    path_settings,
     cors=True,
 ):
     """Create controller server and controller state.
     """
-    # unpack required config options
-    profiles = config["profiles"] # available measurement profiles
 
-    # pyvisa controller
-    controller = Controller()
+    # create settings folder if does not exist
+    path_controller_settings = os.path.join(path_settings, "config.json")
+    if not os.path.exists(path_controller_settings):
+        print(f"Generating new default config in settings path: \"{path_settings}\"")
+        save_default_settings(path_settings)
+    
+    # users path
+    path_users = os.path.join(path_settings, "users")
+
+    # pyvisa controller backend
+    controller = Controller(
+        path_settings=path_controller_settings,
+        path_users=path_users,
+    )
 
     # flask web server as controller api interface
     app = Flask(__name__)
@@ -109,36 +136,21 @@ def create_server(
 
 def run(
     port=9000,
-    data_path="./data",
+    path_settings="./settings",
 ):
     """Wrapper to run server on a port.
     """
 
-    print(f"Data path: \"{data_path}\"")
-
-    # create data folder if does not exist
-    path_config = os.path.join(data_path, "config.json")
-    if not os.path.exists(path_config):
-        import shutil
-        shutil.copytree(
-            src=os.path.join("controller", "assets"),
-            dst=data_path,
-            dirs_exist_ok=True,
-        )
-        print(f"Generating new default config in data path: \"{data_path}\"")
-
-    # load profiles
-    with open(path_config, "r") as f:
-        config = json.load(f)
+    print(f"Settings path: \"{path_settings}\"")
     
     # create and run server app
     app = create_server(
-        config,
+        path_settings=path_settings,
     )
 
     # ssl cert.pem and key.pem file paths
-    path_cert = os.path.join(data_path, "ssl", "cert.pem")
-    path_key = os.path.join(data_path, "ssl", "key.pem")
+    path_cert = os.path.join(path_settings, "ssl", "cert.pem")
+    path_key = os.path.join(path_settings, "ssl", "key.pem")
 
     server = WSGIServer(("", port), app, certfile=path_cert, keyfile=path_key)
     print(f"Listening on port: {port}")
@@ -150,8 +162,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run gax controller server.")
 
     parser.add_argument(
-        "data_path",
-        metavar="data_path",
+        "path_settings",
+        metavar="path_settings",
         type=str,
         help="Controller config data path"
     )

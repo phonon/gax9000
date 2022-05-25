@@ -15,17 +15,17 @@ function fix_slash_on_windows() {
 }
 
 # create directory for ssl certificates if it does not exist
-DIR_DATA=./data/ssl
-if [ ! -d "$DIR_DATA" ]; then
-    echo "CREATING DATA DIRECTORY: $DIR_DATA"
-    mkdir -p $DIR_DATA
+DIR_SSL=./settings/ssl
+if [ ! -d "$DIR_SSL" ]; then
+    echo "CREATING SETTINGS DIRECTORY: $DIR_SSL"
+    mkdir -p $DIR_SSL
 fi
 
 # generate open ssl certificate if does not exist
 # https://security.stackexchange.com/questions/74345/provide-subjectaltname-to-openssl-directly-on-the-command-line/198409#198409
 # Note: "DNS:" needed before localhost
-FILE_SSL_CERT_PEM=./data/ssl/cert.pem
-FILE_SSL_KEY_PEM=./data/ssl/key.pem
+FILE_SSL_CERT_PEM=./settings/ssl/cert.pem
+FILE_SSL_KEY_PEM=./settings/ssl/key.pem
 if [ ! -f "$FILE_SSL_CERT_PEM" ]; then
     echo "GENERATING SSL CERTIFICATE AND KEY AT: $FILE_SSL_CERT_PEM"
     openssl req -x509 -newkey rsa:4096 -days 365 -nodes \
@@ -34,4 +34,4 @@ if [ ! -f "$FILE_SSL_CERT_PEM" ]; then
 fi
 
 # start server
-python controller/app.py ./data
+python controller/app.py ./settings

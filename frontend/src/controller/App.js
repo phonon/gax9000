@@ -43,33 +43,39 @@ function App({
     const [instrB1500Identification, setInstrB1500Identification] = useState(" ");
     const [instrCascadeIdentification, setInstrCascadeIdentification] = useState(" ");
 
-    const [measurementProfile, setMeasurementProfile] = useState("public");
+    const [measurementUsers, setMeasurementUsers] = useState([]);
+    const [measurementProfile, setMeasurementProfile] = useState("");
     const [measurementProgram, setMeasurementProgram] = useState("");
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     useEffect(() => {
-        console.log("USE EFFECT!!!");
+        console.log("<App> USE EFFECT!");
 
         axios.get("api/controller").then(response => {
-            console.log("SUCCESS", response)
+            setGpibB1500(response.data.gpib_b1500);
+            setGpibCascade(response.data.gpib_cascade);
+            setMeasurementUsers(response.data.users);
         }).catch(error => {
             console.log(error)
-        })
+        });
 
         // backend api event response handlers
         const responseHandlers = new Map();
         responseHandlers.set("connect_b1500_idn", ({idn}) => {
             setInstrB1500Identification(idn);
-        })
+        });
         responseHandlers.set("disconnect_b1500", ({}) => {
             setInstrB1500Identification(" ");
-        })
+        });
         responseHandlers.set("connect_cascade_idn", ({idn}) => {
             setInstrCascadeIdentification(idn);
-        })
-        responseHandlers.set("disconnect_cascade", ({idn}) => {
+        });
+        responseHandlers.set("disconnect_cascade", ({}) => {
             setInstrCascadeIdentification(" ");
-        })
+        });
+        responseHandlers.set("set_user_settings", (settings) => {
+            console.log("set_user_settings", settings)
+        });
         
         // event channel for backend SSE events
         const eventSrc = new EventSource(axios.defaults.baseURL + "/event/controller");
@@ -121,11 +127,12 @@ function App({
                                     axios={axios}
                                     label="B1500 Parameter Analyzer"
                                     address={gpibB1500}
-                                    setAddress={setGpibB1500}
+                                    setAddressLocal={setGpibB1500}
                                     identification={instrB1500Identification}
                                     addressRange={GPIB_ADDRESS_RANGE}
-                                    connectMsg={"connect_b1500"}
-                                    disconnectMsg={"disconnect_b1500"}
+                                    apiConnectMsg={"connect_b1500"}
+                                    apiDisconnectMsg={"disconnect_b1500"}
+                                    apiSetAddressMsg={"set_b1500_gpib_address"}
                                 />
                             </Grid>
 
@@ -134,11 +141,12 @@ function App({
                                     axios={axios}
                                     label="Cascade Probe Station"
                                     address={gpibCascade}
-                                    setAddress={setGpibCascade}
+                                    setAddressLocal={setGpibCascade}
                                     identification={instrCascadeIdentification}
                                     addressRange={GPIB_ADDRESS_RANGE}
-                                    connectMsg={"connect_cascade"}
-                                    disconnectMsg={"disconnect_cascade"}
+                                    apiConnectMsg={"connect_cascade"}
+                                    apiDisconnectMsg={"disconnect_cascade"}
+                                    apiSetAddressMsg={"set_cascade_gpib_address"}
                                 />
                             </Grid>
                         </Grid>
@@ -151,6 +159,7 @@ function App({
 
                 <Grid item sx={{width: "100%"}}>
                     <WaferControls
+                        axios={axios}
                     />
                 </Grid>
 
@@ -160,10 +169,12 @@ function App({
 
                 <Grid item sx={{width: "100%"}}>
                     <MeasurementControls
+                        axios={axios}
+                        users={measurementUsers}
                         profile={measurementProfile}
-                        setProfile={setMeasurementProfile}
+                        setProfileLocal={setMeasurementProfile}
                         program={measurementProgram}
-                        setProgram={setMeasurementProgram}
+                        setProgramLocal={setMeasurementProgram}
                         config={measurementConfig}
                         setConfig={setMeasurementConfig}
                     />

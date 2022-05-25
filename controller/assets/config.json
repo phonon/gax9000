@@ -1,5 +1,7 @@
 {
-    "profiles": [
+    "gpib_b1500": 16,
+    "gpib_cascade": 22,
+    "users": [
         "public"
     ]
 }

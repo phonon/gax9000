@@ -15,10 +15,28 @@ import CodeMirror from  "@uiw/react-codemirror";
 import { json as codeMirrorJsonExtension } from "@codemirror/lang-json";
 
 
+const handleSetUserProfile = (axios, username, setProfileLocal) => {
+    axios.put("api/controller", {
+        msg: "get_user_settings",
+        data: {
+            user: username,
+        },
+    });
+    setProfileLocal(username);
+}
+
 /**
  * Measurement controls ui
  */
-export const MeasurementControls = (props) => {
+export const MeasurementControls = ({
+    axios,
+    users,
+    profile,
+    setProfileLocal,
+    program,
+    setProgramLocal,
+    config,
+}) => {
     return (
         <Grid
             container
@@ -41,14 +59,14 @@ export const MeasurementControls = (props) => {
                             <Select
                                 id="measurement-profile-select"
                                 labelId="measurement-profile-select-label"
-                                value={props.profile}
+                                value={profile}
                                 label="Profile"
                                 size="small"
-                                onChange={(e) => props.setProfile(e.target.value)}
+                                onChange={(e) => handleSetUserProfile(axios, e.target.value, setProfileLocal)}
                             >
-                                <MenuItem value={"public"}>public</MenuItem>
-                                <MenuItem value={"acyu"}>acyu</MenuItem>
-                                <MenuItem value={"other"}>other</MenuItem>
+                                {users.map((user) =>
+                                    <MenuItem key={user} value={user}>{user}</MenuItem>
+                                )}
                             </Select>
                         </FormControl>
                             
@@ -79,17 +97,17 @@ export const MeasurementControls = (props) => {
                                     <Select
                                         id="measurement-program-select"
                                         labelId="measurement-program-select-label"
-                                        value={props.program}
+                                        value={program}
                                         label="Program"
                                         size="small"
-                                        onChange={(e) => props.setProgram(e.target.value)}
+                                        onChange={(e) => setProgramLocal(e.target.value)}
                                     >
                                         <MenuItem value={"Keysight_IdVgs"}>Keysight_IdVgs</MenuItem>
                                         <MenuItem value={"Keysight_IdVds"}>Keysight_IdVds</MenuItem>
                                     </Select>
                                 </FormControl>
                                 <CodeMirror
-                                    value={props.config}
+                                    value={config}
                                     theme="light"
                                     height="260px"
                                     minHeight="200px"

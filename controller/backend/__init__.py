@@ -1,2 +1,2 @@
-from .controller import Controller, ControllerApiHandler
+from .controller import Controller, ControllerSettings, ControllerApiHandler, UserProfile
 from .monitor import MonitorApiHandler

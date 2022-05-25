@@ -24,18 +24,31 @@ const handleBtnDisconnect = (axios, msg) => {
     });
 }
 
+const handleGpibAddressChange = (axios, msg, newAddress, setAddressLocal) => {
+    // push gpib address update to controller
+    axios.put("api/controller", {
+        msg: msg,
+        data: {
+            gpib_address: newAddress,
+        },
+    });
+    // set address locally in app
+    setAddressLocal(newAddress);
+}
+
 /**
  * Instrument GPIB connection bar
  */
 export const InstrumentConnection = ({
-    axios,          // axios instance
-    label,          // label in connection text field
-    identification, // identification name of instrument after connecting
-    address,        // gpib address setting
-    setAddress,     // setter for gpib address
-    addressRange,   // range of valid gpib addresses
-    connectMsg,     // msg for connecting to instrument
-    disconnectMsg,  // msg for disconnecting current instrument
+    axios,            // axios instance
+    label,            // label in connection text field
+    identification,   // identification name of instrument after connecting
+    address,          // gpib address setting
+    setAddressLocal,  // setter for local ui gpib address
+    addressRange,     // range of valid gpib addresses
+    apiConnectMsg,    // msg for connecting to instrument
+    apiDisconnectMsg, // msg for disconnecting current instrument
+    apiSetAddressMsg, // msg for setting gpib address
 }) => {
     
     return (
@@ -67,7 +80,7 @@ export const InstrumentConnection = ({
                         value={address}
                         label="GPIB"
                         size="small"
-                        onChange={(e) => setAddress(e.target.value)}
+                        onChange={(e) => handleGpibAddressChange(axios, apiSetAddressMsg, e.target.value, setAddressLocal)}
                     >
                         {addressRange.map((address) =>
                             <MenuItem
@@ -88,7 +101,7 @@ export const InstrumentConnection = ({
                     variant="outlined"
                     size="large"
                     sx={{width: "100%", minWidth: "0px"}}
-                    onClick={() => handleBtnConnect(axios, connectMsg, address)}
+                    onClick={() => handleBtnConnect(axios, apiConnectMsg, address)}
                 >
                     🡱
                 </Button>
@@ -101,7 +114,7 @@ export const InstrumentConnection = ({
                     variant="outlined"
                     size="large"
                     sx={{width: "100%", minWidth: "0px"}}
-                    onClick={() => handleBtnDisconnect(axios, disconnectMsg)}
+                    onClick={() => handleBtnDisconnect(axios, apiDisconnectMsg)}
                 >
                     ✖
                 </Button>

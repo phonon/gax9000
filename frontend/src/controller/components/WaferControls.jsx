@@ -15,7 +15,9 @@ import {
 /**
  * Wafer controller
  */
-export const WaferControls = (props) => {
+export const WaferControls = ({
+    axios,
+}) => {
     return (
         <Box id="wafer-controls" sx={{width: "100%"}}>
             <Grid

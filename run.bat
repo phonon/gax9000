@@ -1,8 +1,8 @@
 :: create directory for ssl certificates if it does not exist
-set "DIR_SSL=%~dp0data\ssl\"
+set "DIR_SSL=%~dp0settings\ssl\"
 echo %DIR_SSL%
 if not exist %DIR_SSL% (
-    echo CREATING DATA DIRECTORY: %DIR_SSL%
+    echo CREATING SETTINGS DIRECTORY: %DIR_SSL%
     mkdir %DIR_SSL%
 )
 
@@ -19,4 +19,4 @@ if not exist %FILE_SSL_CERT_PEM% (
 )
 
 :: start server
-python controller\app.py data
+python controller\app.py settings

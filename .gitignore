@@ -10,5 +10,5 @@ venv
 # ignore local pip package folder
 *.egg-info
 
-# standard data folder for running server
-data
+# standard settings folder for running server
+settings

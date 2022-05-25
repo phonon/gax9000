@@ -1,6 +1,4 @@
 {
-    "gpibB1500": 16,
-    "gpibCascade": 22,
     "die_size_x": 10000,
     "die_size_y": 10000,
     "die_offset_x": 0,

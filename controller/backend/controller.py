@@ -4,6 +4,8 @@ Controller API
 Handle read/write wafer and controller config from client ui.
 """
 import time
+import os
+import logging
 import traceback
 import json
 import pyvisa
@@ -11,8 +13,77 @@ from flask_restful import Api, Resource, reqparse
 from controller.sse import EventChannel
 
 
+class UserProfile():
+    """Saved user settings."""
+    def __init__(
+        self,
+        username,
+        die_size_x,
+        die_size_y,
+        die_offset_x,
+        die_offset_y,
+        current_die_x,
+        current_die_y,
+        device_x,
+        device_y,
+        data_folder,
+    ):
+        self.username = username
+        self.die_size_x = die_size_x
+        self.die_size_y = die_size_y
+        self.die_offset_x = die_offset_x
+        self.die_offset_y = die_offset_y
+        self.current_die_x = current_die_x
+        self.current_die_y = current_die_y
+        self.device_x = device_x
+        self.device_y = device_y
+        self.data_folder = data_folder
+    
+    def default(username):
+        """Default settings."""
+        return UserProfile(
+            username=username,
+            die_size_x=10000,
+            die_size_y=10000,
+            die_offset_x=0,
+            die_offset_y=0,
+            current_die_x=0,
+            current_die_y=0,
+            device_x=0,
+            device_y=0,
+            data_folder="",
+        )
+
+
+class ControllerSettings():
+    """Global controller settings. These are saved each time
+    value is changed.
+    """
+    def __init__(
+        self,
+        gpib_b1500: int,
+        gpib_cascade: int,
+        users: list,
+    ):
+        self.gpib_b1500 = gpib_b1500
+        self.gpib_cascade = gpib_cascade
+        self.users = users
+
+    def default():
+        """Return a default settings object."""
+        return ControllerSettings(
+            gpib_b1500=16,
+            gpib_cascade=22,
+            users=["public"],
+        )
+
+
 class Controller():
-    def __init__(self):
+    def __init__(
+        self,
+        path_settings: str,
+        path_users: str,
+    ):
         """Singleton controller for managing instrument resources.
         """
         # py visa resource manager
@@ -21,6 +92,45 @@ class Controller():
         self.instrument_b1500 = None
         # cascade instrument
         self.instrument_cascade = None
+        # controller global settings
+        self.path_settings = path_settings
+        # do initial controller settings load
+        self.load_settings()
+        # controller user settings path
+        self.path_users = path_users
+        # user settings, maps username: str => UserProfile: class
+        self.users = {}
+
+    def load_settings(self):
+        """Load controller settings from file."""
+        with open(self.path_settings, "r") as f:
+            self.settings = ControllerSettings(**json.load(f))
+    
+    def save_settings(self):
+        """Save controller settings to file."""
+        with open(self.path_settings, "w+") as f:
+            json.dump(self.settings.__dict__, f, indent=2)
+
+    def get_user_settings(self, username):
+        """Get user settings.
+        If it doesn't exist, load data from saved user `settings.json`.
+        If saved settings json file does not exist, save default user
+        settings first.
+        """
+        if username not in self.users:
+            path_user = os.path.join(self.path_users, username)
+            path_user_settings = os.path.join(path_user, "settings.json")
+            if os.path.exists(path_user_settings):
+                with open(path_user_settings, "r") as f:
+                    self.users[username] = UserProfile(**json.load(f))
+            else: # generate default user settings
+                logging.info(f"Creating default user settings for {username} at: {path_user_settings}")
+                self.users[username] = UserProfile.default(username)
+                os.makedirs(path_user, exist_ok=True)
+                with open(path_user_settings, "w+") as f:
+                    json.dump(self.users[username].__dict__, f, indent=2)
+        
+        return self.users[username]
 
     def connect_b1500(self, gpib: int):
         """Connect to b1500 instrument resource through GPIB
@@ -59,8 +169,10 @@ class ControllerApiHandler(Resource):
         self.put_handlers = {
             "connect_b1500": self.connect_b1500,
             "disconnect_b1500": self.disconnect_b1500,
+            "set_b1500_gpib_address": self.set_b1500_gpib_address,
             "connect_cascade": self.connect_cascade,
             "disconnect_cascade": self.disconnect_cascade,
+            "get_user_settings": self.get_user_settings,
         }
     
     def connect_b1500(self, gpib_address):
@@ -80,6 +192,11 @@ class ControllerApiHandler(Resource):
             "data": {},
         })
 
+    def set_b1500_gpib_address(self, gpib_address):
+        """Set B1500 GPIB address setting."""
+        self.controller.settings.gpib_b1500 = gpib_address
+        self.controller.save_settings()
+    
     def connect_cascade(self, gpib_address):
         idn = self.controller.connect_cascade(gpib_address)
         print(f"Connected (GPIB: {gpib_address}): {idn}")
@@ -96,17 +213,42 @@ class ControllerApiHandler(Resource):
             "msg": "disconnect_cascade",
             "data": {},
         })
+
+    def set_cascade_gpib_address(self, gpib_address):
+        """Set Cascade GPIB address setting."""
+        self.controller.settings.gpib_cascade = gpib_address
+        self.controller.save_settings()
+    
+    def get_user_settings(self, user):
+        """Get user settings."""
+        user_settings = self.controller.get_user_settings(user)
+        self.channel.publish({
+            "msg": "set_user_settings",
+            "data": {
+                "settings": user_settings.__dict__,
+            },
+        })
     
     def get(self):
-        # print("SLEEP?")
-        # time.sleep(4)
-        # print("WAKE")
+        """Returns global controller config settings."""
+        # reload controller settings on page load
+        self.controller.load_settings()
         return {
-            "resultStatus": "SUCCESS",
-            "message": "Hello Api Handler",
+            "gpib_b1500": self.controller.settings.gpib_b1500,
+            "gpib_cascade": self.controller.settings.gpib_cascade,
+            "users": self.controller.settings.users
         }
 
     def put(self):
+        """Main handler for updating global config or user profile data.
+        Put requests are all in format:
+            {
+                "msg": "request_event",
+                "data": { ... },
+            }
+        where "msg" routes to the event handler and "data" contains
+        the event handler function inputs.
+        """
         parser = reqparse.RequestParser()
         parser.add_argument("msg", type=str)
         parser.add_argument("data", type=dict)
@@ -121,33 +263,3 @@ class ControllerApiHandler(Resource):
             print(exception)
             print(traceback.format_exc())
         
-
-    def post(self):
-        print(self)
-
-        parser = reqparse.RequestParser()
-        parser.add_argument("type", type=str)
-        parser.add_argument("message", type=str)
-
-        args = parser.parse_args()
-
-        print(args)
-        # note: post req from frontend needs to match strings here
-
-        request_type = args["type"]
-        request_json = args["message"]
-        # ret_status, ret_msg = ReturnData(request_type, request_json)
-
-        # currently just returning the req straight
-        ret_status = request_type
-        ret_msg = request_json
-
-        if ret_msg:
-            message = f"Your Message Requested: {ret_msg}"
-        else:
-            message = "No Msg"
-
-        return {
-            "status": "Success",
-            "message": message,
-        }
