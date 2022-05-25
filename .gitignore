@@ -12,3 +12,6 @@ venv
 
 # standard settings folder for running server
 settings
+
+# logging folder
+logs

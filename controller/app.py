@@ -1,16 +1,15 @@
 import os
 import json
+import logging
 import numpy as np
-from flask import Flask, send_from_directory
+from flask import Flask, request
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS # disable on deployment
-# from api.HelloApiHandler import HelloApiHandler
-import sse
-from flask import Flask, request
 from gevent.pywsgi import WSGIServer
 import gevent
-
-from backend import Controller, ControllerSettings, ControllerApiHandler, UserProfile, MonitorApiHandler
+import sse
+from controller.util import timestamp_date
+from controller.backend import Controller, ControllerSettings, ControllerApiHandler, UserProfile, MonitorApiHandler
 
 
 def save_default_settings(path_settings):
@@ -40,7 +39,7 @@ def create_server(
     # create settings folder if does not exist
     path_controller_settings = os.path.join(path_settings, "config.json")
     if not os.path.exists(path_controller_settings):
-        print(f"Generating new default config in settings path: \"{path_settings}\"")
+        logging.info(f"Generating new default config in settings path: \"{path_settings}\"")
         save_default_settings(path_settings)
     
     # users path
@@ -140,8 +139,26 @@ def run(
 ):
     """Wrapper to run server on a port.
     """
+    # setup logging
+    logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
+    rootLogger = logging.getLogger()
+    rootLogger.setLevel(logging.DEBUG)
 
-    print(f"Settings path: \"{path_settings}\"")
+    os.makedirs("logs", exist_ok=True)
+    logFileHandler = logging.FileHandler(f"logs/{timestamp_date()}.log", mode="a", encoding=None, delay=False)
+    logFileHandler.setLevel(logging.DEBUG)
+    logFileHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(logFileHandler)
+
+    logConsoleHandler = logging.StreamHandler()
+    logConsoleHandler.setLevel(logging.DEBUG)
+    logConsoleHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(logConsoleHandler)
+
+    logging.info("============================================================")
+    logging.info("RUNNING GAX 9000")
+    logging.info("============================================================")
+    logging.info(f"Settings path: \"{path_settings}\"")
     
     # create and run server app
     app = create_server(
@@ -153,7 +170,7 @@ def run(
     path_key = os.path.join(path_settings, "ssl", "key.pem")
 
     server = WSGIServer(("", port), app, certfile=path_cert, keyfile=path_key)
-    print(f"Listening on port: {port}")
+    logging.info(f"Controller server listening on port: {port}")
     server.serve_forever()
 
 

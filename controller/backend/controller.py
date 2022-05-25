@@ -177,7 +177,7 @@ class ControllerApiHandler(Resource):
     
     def connect_b1500(self, gpib_address):
         idn = self.controller.connect_b1500(gpib_address)
-        print(f"Connected (GPIB: {gpib_address}): {idn}")
+        logging.info(f"Connected (GPIB: {gpib_address}): {idn}")
         self.channel.publish({
             "msg": "connect_b1500_idn",
             "data": {
@@ -199,7 +199,7 @@ class ControllerApiHandler(Resource):
     
     def connect_cascade(self, gpib_address):
         idn = self.controller.connect_cascade(gpib_address)
-        print(f"Connected (GPIB: {gpib_address}): {idn}")
+        logging.info(f"Connected (GPIB: {gpib_address}): {idn}")
         self.channel.publish({
             "msg": "connect_cascade_idn",
             "data": {
@@ -255,11 +255,11 @@ class ControllerApiHandler(Resource):
 
         try:
             args = parser.parse_args()
-            print(f"PUT {args}")
+            logging.info(f"PUT {args}")
             if args["msg"] in self.put_handlers:
                 kwargs = args["data"]
                 self.put_handlers[args["msg"]](**kwargs)
         except Exception as exception:
-            print(exception)
-            print(traceback.format_exc())
+            logging.error(exception)
+            logging.error(traceback.format_exc())
         
