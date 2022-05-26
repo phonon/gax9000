@@ -48,7 +48,7 @@ function App({
     const [measurementProgram, setMeasurementProgram] = useState("");
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
-    // user die settings
+    // user settings
     const [dieSizeX, setDieSizeX] = useState(0);
     const [dieSizeY, setDieSizeY] = useState(0);
     const [dieOffsetX, setDieOffsetX] = useState(0);
@@ -57,6 +57,7 @@ function App({
     const [currentDieY, setCurrentDieY] = useState(0);
     const [deviceX, setDeviceX] = useState(0);
     const [deviceY, setDeviceY] = useState(0);
+    const [dataFolder, setDataFolder] = useState("");
     
     useEffect(() => {
         console.log("<App> USE EFFECT!");
@@ -93,6 +94,7 @@ function App({
             setCurrentDieY(settings.current_die_y);
             setDeviceX(settings.device_x);
             setDeviceY(settings.device_y);
+            setDataFolder(settings.data_folder);
         });
         
         // event channel for backend SSE events
@@ -208,6 +210,8 @@ function App({
                         userList={measurementUserList}
                         user={measurementUser}
                         setUserLocal={setMeasurementUser}
+                        dataFolder={dataFolder}
+                        setDataFolderLocal={setDataFolder}
                         program={measurementProgram}
                         setProgramLocal={setMeasurementProgram}
                         config={measurementConfig}

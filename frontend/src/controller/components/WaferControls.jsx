@@ -36,7 +36,7 @@ const handleSetUserSetting = (axios, user, setting, type, oldValue, newValue, se
         let newValueParsed;
         let valid;
         if ( type === Number ) {
-            newValueParsed = parseFloat(newValue);
+            newValueParsed = Number(newValue);
             valid = isValidNumber(newValueParsed);
         } else {
             newValueParsed = newValue;
