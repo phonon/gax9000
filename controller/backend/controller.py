@@ -201,6 +201,9 @@ class Controller():
         self.users = {}
         # repeating task to save user settings
         self.task_save_user_settings = gevent.spawn(self._task_save_user_settings)
+        # current main instrument task, this must be locked and synchronized
+        # to ensure instrument is only running single task at a time
+        self.task = None
     
     def load_settings(self):
         """Load controller settings from file."""

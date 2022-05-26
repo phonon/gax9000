@@ -13,7 +13,8 @@ import {
     Select,
     TextField,
 } from "@mui/material";
-import { 
+import {
+    DialogRunMeasurement,
     InstrumentConnection,
     MeasurementControls,
     WaferControls,
@@ -65,9 +66,53 @@ function App({
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     // sweep settings
-    const [sweep, setSweep] = useState("Single");
-    const [sweepConfig, setSweepConfig] = useState({});
+    const [sweep, setSweep] = useState("single");
+    const [sweepConfig, setSweepConfig] = useState("{}");
+    const [sweepSaveData, setSweepSaveData] = useState(true);
     
+    // run dialog open
+    const [runConfirmDialog, setRunConfirmDialog] = useState(false);
+    
+    // measurement status
+    const [measurementRunning, setMeasurementRunning] = useState(false);
+
+    // Function to try and run a measurement.
+    // This performs basic checks (e.g. user valid) 
+    // and opens a confirmation dialog.
+    const tryRunMeasurement = () => {
+        if ( measurementUser === "" || (sweepSaveData && dataFolder === "") ) {
+            console.error("Missing user or data folder");
+            return;
+        }
+        setRunConfirmDialog(true)
+    };
+    
+    // function to run measurement
+    const runMeasurement = () => {
+        // push change to server
+        axios.put("api/controller", {
+            msg: "run_measurement",
+            data: {
+                user: measurementUser,
+                currentDieX: currentDieX,
+                currentDieY: currentDieY,
+                deviceX: deviceX,
+                deviceY: deviceY,
+                deviceRow: deviceRow,
+                deviceCol: deviceCol,
+                dataFolder: dataFolder,
+                program: measurementProgram,
+                programConfig: measurementConfig,
+                sweep: sweep,
+                sweepConfig: sweepConfig,
+                sweepSaveData: sweepSaveData,
+            },
+        });
+
+        setMeasurementRunning(true);
+        setRunConfirmDialog(false);
+    };
+
     useEffect(() => {
         console.log("<App> USE EFFECT!");
 
@@ -235,9 +280,32 @@ function App({
                         setSweepLocal={setSweep}
                         sweepConfig={sweepConfig}
                         setSweepConfigLocal={setSweepConfig}
+                        sweepSaveData={sweepSaveData}
+                        setSweepSaveDataLocal={setSweepSaveData}
+                        measurementRunning={measurementRunning}
+                        handleRunMeasurement={tryRunMeasurement}
                     />
                 </Grid>
             </Grid>
+
+            {/* Dialog box to confirm running the measurement */}
+            <DialogRunMeasurement
+                open={runConfirmDialog}
+                handleClose={() => setRunConfirmDialog(false)}
+                runMeasurement={runMeasurement}
+                currentDieX={currentDieX}
+                currentDieY={currentDieY}
+                deviceX={deviceX}
+                deviceY={deviceY}
+                deviceRow={deviceRow}
+                deviceCol={deviceCol}
+                dataFolder={dataFolder}
+                program={measurementProgram}
+                programConfig={measurementConfig}
+                sweep={sweep}
+                sweepConfig={sweepConfig}
+                sweepSaveData={sweepSaveData}
+            />
         </Container>
     );
 }

@@ -1,9 +1,12 @@
 import {
     Box,
     Button, 
+    Checkbox,
     Container,
     Divider,
     FormControl,
+    FormControlLabel,
+    FormGroup,
     Grid,
     IconButton,
     InputLabel,
@@ -74,7 +77,23 @@ export const MeasurementControls = ({
     sweep,
     setSweepLocal,
     sweepConfig,
+    sweepSaveData,
+    setSweepSaveDataLocal,
+    measurementRunning,
+    handleRunMeasurement,
 }) => {
+
+    // required to run measurement
+    const missingUserOrDataFolder = user === "" || (sweepSaveData && dataFolder === "");
+
+    // measurement status text
+    let measurementStatusText = "Start Measurement";
+    if ( measurementRunning ) {
+        measurementStatusText = "Measurement Running...";
+    } else if ( missingUserOrDataFolder ) {
+        measurementStatusText = "Missing User or Data Folder";
+    }
+
     return (
         <Grid
             container
@@ -143,6 +162,8 @@ export const MeasurementControls = ({
                     </Grid>
                 </Box>
             </Grid>
+
+            {/* Measurement program and sweep config */}
             <Grid item sx={{width: "100%"}}>
                 <Box id="measurement-program" sx={{width: "100%"}}>
                     <Grid
@@ -150,6 +171,7 @@ export const MeasurementControls = ({
                         spacing={1}
                         direction="row"
                     >
+                        {/* Measurement program config */}
                         <Grid item xs={6}>
                             <Box>
                                 <FormControl fullWidth>
@@ -180,76 +202,76 @@ export const MeasurementControls = ({
                                 />
                             </Box>
                         </Grid>
-
+                        
+                        {/* Measurement sweep config */}
                         <Grid item xs={6}>
-                            <Grid
-                                container
-                                spacing={1}
-                                direction="column"
-                            >
-                                {/* Measurement sweep config */}
-                                <Grid item>
-                                    <Box>
-                                        <FormControl fullWidth>
-                                            <InputLabel id="measurement-sweep-select-label">Sweep</InputLabel>
-                                            <Select
-                                                id="measurement-sweep-select"
-                                                labelId="measurement-sweep-select-label"
-                                                value={sweep}
-                                                label="Sweep"
-                                                size="small"
-                                                onChange={(e) => setSweepLocal(e.target.value)}
-                                            >
-                                                <MenuItem value={"Single"}>Single</MenuItem>
-                                                <MenuItem value={"Array"}>Array</MenuItem>
-                                            </Select>
-                                        </FormControl>
-                                        <CodeMirror
-                                            value={programConfig}
-                                            theme="light"
-                                            height="260px"
-                                            minHeight="200px"
-                                            extensions={[
-                                                codeMirrorJsonExtension(),
-                                            ]}
-                                            onChange={(value, viewUpdate) => {
-                                                console.log('value:', value);
-                                            }}
-                                        />
-                                    </Box>
-                                </Grid>
-
-                                {/* Buttons to start measurement */}
-                                <Grid item>
-                                    <Grid
-                                        container
-                                        spacing={1}
-                                        direction="row"
+                            <Box>
+                                <FormControl fullWidth>
+                                    <InputLabel id="measurement-sweep-select-label">Sweep</InputLabel>
+                                    <Select
+                                        id="measurement-sweep-select"
+                                        labelId="measurement-sweep-select-label"
+                                        value={sweep}
+                                        label="Sweep"
+                                        size="small"
+                                        onChange={(e) => setSweepLocal(e.target.value)}
                                     >
-                                        <Grid item xs={9}>
-                                            <Button
-                                                fullWidth
-                                                variant="contained"
-                                            >
-                                                Start Measurement
-                                            </Button>
-                                        </Grid>
-                                        <Grid item xs={3}>
-                                            <Button
-                                                fullWidth
-                                                variant="outlined"
-                                                color="error"
-                                            >
-                                                Stop
-                                            </Button>
-                                        </Grid>
-                                    </Grid>
-                                </Grid>
-                            </Grid>
-                            
+                                        <MenuItem value={"single"}>single</MenuItem>
+                                        <MenuItem value={"array"}>array</MenuItem>
+                                    </Select>
+                                </FormControl>
+                                <CodeMirror
+                                    value={sweepConfig}
+                                    theme="light"
+                                    height="200px"
+                                    minHeight="160px"
+                                    extensions={[
+                                        codeMirrorJsonExtension(),
+                                    ]}
+                                    onChange={(value, viewUpdate) => {
+                                        console.log('value:', value);
+                                    }}
+                                />
+                                
+                                <FormGroup>
+                                    <FormControlLabel control={<Checkbox checked={sweepSaveData} onChange={(e) => setSweepSaveDataLocal(e.target.checked)}/>} label="Save Data" />
+                                </FormGroup>
+                            </Box>
                         </Grid>
                     </Grid>
                 </Box>
+            </Grid>
+
+            {/* Start measurement button and save data configs */}
+            <Grid item sx={{width: "100%"}}>
+                <Grid
+                    container
+                    spacing={1}
+                    direction="row"
+                >
+                    <Grid item xs={6}/>
+                    
+                    <Grid item xs={4}>
+                        <Button
+                            fullWidth
+                            variant={measurementRunning ? "outlined" : "contained"}
+                            onClick={handleRunMeasurement}
+                            disabled={missingUserOrDataFolder}
+                        >
+                            {measurementStatusText}
+                        </Button>
+                    </Grid>
+                    <Grid item xs={2}>
+                        <Button
+                            fullWidth
+                            variant="outlined"
+                            color="error"
+                        >
+                            Stop
+                        </Button>
+                    </Grid>
+                </Grid>
+                
             </Grid>
         </Grid>
     );
