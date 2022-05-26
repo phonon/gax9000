@@ -43,10 +43,9 @@ function App({
     const [instrB1500Identification, setInstrB1500Identification] = useState(" ");
     const [instrCascadeIdentification, setInstrCascadeIdentification] = useState(" ");
 
+    // users
     const [measurementUserList, setMeasurementUserList] = useState([]);
     const [measurementUser, setMeasurementUser] = useState("");
-    const [measurementProgram, setMeasurementProgram] = useState("");
-    const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     // user settings
     const [dieSizeX, setDieSizeX] = useState(0);
@@ -57,7 +56,17 @@ function App({
     const [currentDieY, setCurrentDieY] = useState(0);
     const [deviceX, setDeviceX] = useState(0);
     const [deviceY, setDeviceY] = useState(0);
+    const [deviceRow, setDeviceRow] = useState(0);
+    const [deviceCol, setDeviceCol] = useState(0);
     const [dataFolder, setDataFolder] = useState("");
+
+    // program settings
+    const [measurementProgram, setMeasurementProgram] = useState("");
+    const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
+
+    // sweep settings
+    const [sweep, setSweep] = useState("Single");
+    const [sweepConfig, setSweepConfig] = useState({});
     
     useEffect(() => {
         console.log("<App> USE EFFECT!");
@@ -94,6 +103,8 @@ function App({
             setCurrentDieY(settings.current_die_y);
             setDeviceX(settings.device_x);
             setDeviceY(settings.device_y);
+            setDeviceRow(settings.device_row);
+            setDeviceCol(settings.device_col);
             setDataFolder(settings.data_folder);
         });
         
@@ -197,6 +208,10 @@ function App({
                         setDeviceXLocal={setDeviceX}
                         deviceY={deviceY}
                         setDeviceYLocal={setDeviceY}
+                        deviceRow={deviceRow}
+                        setDeviceRowLocal={setDeviceRow}
+                        deviceCol={deviceCol}
+                        setDeviceColLocal={setDeviceCol}
                     />
                 </Grid>
 
@@ -214,8 +229,12 @@ function App({
                         setDataFolderLocal={setDataFolder}
                         program={measurementProgram}
                         setProgramLocal={setMeasurementProgram}
-                        config={measurementConfig}
-                        setConfig={setMeasurementConfig}
+                        programConfig={measurementConfig}
+                        setProgramConfig={setMeasurementConfig}
+                        sweep={sweep}
+                        setSweepLocal={setSweep}
+                        sweepConfig={sweepConfig}
+                        setSweepConfigLocal={setSweepConfig}
                     />
                 </Grid>
             </Grid>

@@ -19,15 +19,17 @@ class UserGlobalSettings():
     def __init__(
         self,
         username,
-        die_size_x,
-        die_size_y,
-        die_offset_x,
-        die_offset_y,
-        current_die_x,
-        current_die_y,
-        device_x,
-        device_y,
-        data_folder,
+        die_size_x=10000,
+        die_size_y=10000,
+        die_offset_x=0,
+        die_offset_y=0,
+        current_die_x=0,
+        current_die_y=0,
+        device_x=0,
+        device_y=0,
+        device_row=0,
+        device_col=0,
+        data_folder="",
     ):
         self.username = username
         self.die_size_x = die_size_x
@@ -38,21 +40,14 @@ class UserGlobalSettings():
         self.current_die_y = current_die_y
         self.device_x = device_x
         self.device_y = device_y
+        self.device_row = device_row
+        self.device_col = device_col
         self.data_folder = data_folder
     
     def default(username):
         """Default settings."""
         return UserGlobalSettings(
             username=username,
-            die_size_x=10000,
-            die_size_y=10000,
-            die_offset_x=0,
-            die_offset_y=0,
-            current_die_x=0,
-            current_die_y=0,
-            device_x=0,
-            device_y=0,
-            data_folder="",
         )
 
 

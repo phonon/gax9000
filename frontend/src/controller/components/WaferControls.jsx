@@ -83,6 +83,10 @@ export const WaferControls = ({
     setDeviceXLocal,
     deviceY,
     setDeviceYLocal,
+    deviceRow,
+    setDeviceRowLocal,
+    deviceCol,
+    setDeviceColLocal,
 }) => {
     return (
         <Box id="wafer-controls" sx={{width: "100%"}}>
@@ -220,7 +224,7 @@ export const WaferControls = ({
                             </Grid>
                             <Grid item xs={9}/>
                             
-                            {/* top row */}
+                            {/* controls: top row */}
                             <Grid item xs={4}/>
                             <Grid item xs={4}>
                                 <Button variant="outlined" color="primary">
@@ -229,7 +233,7 @@ export const WaferControls = ({
                             </Grid>
                             <Grid item xs={10}/>
 
-                            {/* middle row */}
+                            {/* controls: middle row */}
                             <Grid item xs={4}>
                                 <Button variant="outlined" color="primary">
                                     🡸
@@ -256,7 +260,7 @@ export const WaferControls = ({
                                 />
                             </Grid>
 
-                            {/* bottom row */}
+                            {/* controls: bottom row */}
                             <Grid item xs={4}/>
                             <Grid item xs={4}>
                                 <Button variant="outlined" color="primary">
@@ -264,6 +268,32 @@ export const WaferControls = ({
                                 </Button>
                             </Grid>
                             <Grid item xs={10}/>
+                            
+                            {/* device x/y: bottom row */}
+                            <Grid item xs={6} align="center">
+                                <TextField
+                                    fullWidth
+                                    label="Row"
+                                    variant="outlined"
+                                    size="small"
+                                    value={deviceRow}
+                                    onChange={(e) => handleSetUserSetting(axios, user, "device_row", Number, deviceRow, e.target.value, setDeviceRowLocal)}
+                                    error={!isNumeric(deviceRow)}
+                                />
+                            </Grid>
+                            <Grid item xs={6} align="center">
+                                <TextField
+                                    fullWidth
+                                    label="Column"
+                                    variant="outlined"
+                                    size="small"
+                                    value={deviceCol}
+                                    onChange={(e) => handleSetUserSetting(axios, user, "device_col", Number, deviceCol, e.target.value, setDeviceColLocal)}
+                                    error={!isNumeric(deviceCol)}
+                                />
+                            </Grid>
+                            <Grid item xs={6}/>
+
                         </Grid>
                     </Box>
                 </Grid>
