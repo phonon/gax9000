@@ -31,9 +31,9 @@ const DEFAULT_MEASUREMENT_CONFIG = `{
   "v_gs": {
       "start": -1.2,
       "stop": 1.2,
-      "step": 0.1,
+      "step": 0.1
   },
-  "v_ds": [-0.05, -0.4, -1.2],
+  "v_ds": [-0.05, -0.4, -1.2]
 }`;
 
 function App({
@@ -62,11 +62,13 @@ function App({
     const [dataFolder, setDataFolder] = useState("");
 
     // program settings
+    const [measurementProgramList, setMeasurementProgramList] = useState([]);
     const [measurementProgram, setMeasurementProgram] = useState("");
     const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
 
     // sweep settings
-    const [sweep, setSweep] = useState("single");
+    const [sweepList, setSweepList] = useState([]);
+    const [sweep, setSweep] = useState("");
     const [sweepConfig, setSweepConfig] = useState("{}");
     const [sweepSaveData, setSweepSaveData] = useState(true);
     
@@ -92,20 +94,20 @@ function App({
         // push change to server
         axios.put("api/controller", {
             msg: "run_measurement",
-            data: {
+            data: { // snake case to follow python internal convention
                 user: measurementUser,
-                currentDieX: currentDieX,
-                currentDieY: currentDieY,
-                deviceX: deviceX,
-                deviceY: deviceY,
-                deviceRow: deviceRow,
-                deviceCol: deviceCol,
-                dataFolder: dataFolder,
+                current_die_x: currentDieX,
+                current_die_y: currentDieY,
+                device_x: deviceX,
+                device_y: deviceY,
+                device_row: deviceRow,
+                device_col: deviceCol,
+                data_folder: dataFolder,
                 program: measurementProgram,
-                programConfig: measurementConfig,
+                program_config: measurementConfig,
                 sweep: sweep,
-                sweepConfig: sweepConfig,
-                sweepSaveData: sweepSaveData,
+                sweep_config: sweepConfig,
+                sweep_save_data: sweepSaveData,
             },
         });
 
@@ -114,12 +116,14 @@ function App({
     };
 
     useEffect(() => {
-        console.log("<App> USE EFFECT!");
+        console.log("<App> Rendered");
 
         axios.get("api/controller").then(response => {
             setGpibB1500(response.data.gpib_b1500);
             setGpibCascade(response.data.gpib_cascade);
             setMeasurementUserList(response.data.users);
+            setMeasurementProgramList(response.data.programs);
+            setSweepList(response.data.sweeps);
         }).catch(error => {
             console.log(error)
         });
@@ -139,7 +143,6 @@ function App({
             setInstrCascadeIdentification(" ");
         });
         responseHandlers.set("set_user_settings", ({settings}) => {
-            console.log("set_user_settings", settings, settings.die_size_x);
             setDieSizeX(settings.die_size_x);
             setDieSizeY(settings.die_size_y);
             setDieOffsetX(settings.die_offset_x);
@@ -151,6 +154,14 @@ function App({
             setDeviceRow(settings.device_row);
             setDeviceCol(settings.device_col);
             setDataFolder(settings.data_folder);
+        });
+        responseHandlers.set("measurement_error", ({error}) => {
+            console.error("Measurement failed error", error);
+            setMeasurementRunning(false);
+        });
+        responseHandlers.set("measurement_finish", ({status}) => {
+            console.log("Measurement finished:", status);
+            setMeasurementRunning(false);
         });
         
         // event channel for backend SSE events
@@ -272,10 +283,12 @@ function App({
                         setUserLocal={setMeasurementUser}
                         dataFolder={dataFolder}
                         setDataFolderLocal={setDataFolder}
+                        programList={measurementProgramList}
                         program={measurementProgram}
                         setProgramLocal={setMeasurementProgram}
                         programConfig={measurementConfig}
                         setProgramConfig={setMeasurementConfig}
+                        sweepList={sweepList}
                         sweep={sweep}
                         setSweepLocal={setSweep}
                         sweepConfig={sweepConfig}

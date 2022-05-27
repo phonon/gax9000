@@ -71,9 +71,11 @@ export const MeasurementControls = ({
     setUserLocal,
     dataFolder,
     setDataFolderLocal,
+    programList,
     program,
     setProgramLocal,
     programConfig,
+    sweepList,
     sweep,
     setSweepLocal,
     sweepConfig,
@@ -184,8 +186,9 @@ export const MeasurementControls = ({
                                         size="small"
                                         onChange={(e) => setProgramLocal(e.target.value)}
                                     >
-                                        <MenuItem value={"Keysight_IdVgs"}>Keysight_IdVgs</MenuItem>
-                                        <MenuItem value={"Keysight_IdVds"}>Keysight_IdVds</MenuItem>
+                                        {programList.map((x) =>
+                                            <MenuItem key={x} value={x}>{x}</MenuItem>
+                                        )}
                                     </Select>
                                 </FormControl>
                                 <CodeMirror
@@ -216,8 +219,9 @@ export const MeasurementControls = ({
                                         size="small"
                                         onChange={(e) => setSweepLocal(e.target.value)}
                                     >
-                                        <MenuItem value={"single"}>single</MenuItem>
-                                        <MenuItem value={"array"}>array</MenuItem>
+                                        {sweepList.map((x) =>
+                                            <MenuItem key={x} value={x}>{x}</MenuItem>
+                                        )}
                                     </Select>
                                 </FormControl>
                                 <CodeMirror

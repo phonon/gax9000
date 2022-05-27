@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 
 # list of available program names (hardcoded)
 MEASUREMENT_PROGRAMS = [
+    "debug",
     "keysight_id_vds",
     "keysight_id_vgs",
 ]
@@ -13,20 +14,25 @@ MEASUREMENT_PROGRAMS = [
 def get_measurement_program(name):
     """Return sweep by name."""
     s = name.lower()
-    if s == "keysight_id_vds":
-        from controller.programs import ProgramKeysightIdVds
+    if s == "debug":
+        from controller.programs.debug import ProgramDebug
+        return ProgramDebug
+    elif s == "keysight_id_vds":
+        from controller.programs.keysight_id_vds import ProgramKeysightIdVds
         return ProgramKeysightIdVds
     elif s == "keysight_id_vgs":
-        from controller.programs import ProgramKeysightIdVgs
+        from controller.programs.keysight_id_vgs import ProgramKeysightIdVgs
         return ProgramKeysightIdVgs
     else:
         logging.error(f"Unknown program type: {name}")
         return None
 
+
 class MeasurementProgram(ABC):
     """Interface for measurement programs."""
     
+    @staticmethod
     @abstractmethod
-    def run(self):
+    def run(**kwargs):
         """Run the program."""
         pass

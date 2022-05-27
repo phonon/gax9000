@@ -4,15 +4,18 @@ Controller API
 Handle read/write wafer and controller config from client ui.
 """
 import time
+from typing import Callable
 import os
 import logging
 import traceback
 import json
 import gevent
+from gevent.lock import BoundedSemaphore
 import pyvisa
 from flask_restful import Api, Resource, reqparse
 from controller.sse import EventChannel
-
+from controller.programs import MEASUREMENT_PROGRAMS, MeasurementProgram, get_measurement_program
+from controller.sweeps import MEASUREMENT_SWEEPS, MeasurementSweep, get_measurement_sweep
 
 class UserGlobalSettings():
     """Saved user global config settings."""
@@ -204,6 +207,8 @@ class Controller():
         # current main instrument task, this must be locked and synchronized
         # to ensure instrument is only running single task at a time
         self.task = None
+        # lock on instrument task
+        self.task_lock = BoundedSemaphore(value=1)
     
     def load_settings(self):
         """Load controller settings from file."""
@@ -280,19 +285,84 @@ class Controller():
         """Disconnect from cascade instrument."""
         pass
 
+    def run_measurement(
+        self,
+        user: str,
+        current_die_x: int,
+        current_die_y: int,
+        device_x: float,
+        device_y: float,
+        device_row: int,
+        device_col: int,
+        data_folder: str,
+        program: MeasurementProgram,
+        program_config: dict,
+        sweep: MeasurementSweep,
+        sweep_config: dict,
+        sweep_save_data: bool,
+        callback: Callable,
+    ):
+        print("RUNNING MEASUREMENT")
+        print("user =", user)
+        print("current_die_x =", current_die_x)
+        print("current_die_y =", current_die_y)
+        print("device_x =", device_x)
+        print("device_y =", device_y)
+        print("device_row =", device_row)
+        print("device_col =", device_col)
+        print("data_folder =", data_folder)
+        print("program =", program)
+        print("program_config =", program_config)
+        print("sweep =", sweep)
+        print("sweep_config =", sweep_config)
+        print("sweep_save_data =", sweep_save_data)
+        
+        # try acquire instrument task lock
+        if self.task_lock.acquire(blocking=False, timeout=None):
+            
+            def task():
+                logging.info(f"Beginning measurement sweep: {sweep}")
+                sweep.run(
+                    user=user,
+                    sweep_config=sweep_config,
+                    sweep_save_data=sweep_save_data,
+                    current_die_x=current_die_x,
+                    current_die_y=current_die_y,
+                    device_x=device_x,
+                    device_y=device_y,
+                    device_row=device_row,
+                    device_col=device_col,
+                    data_folder=data_folder,
+                    program=program,
+                    program_config=program_config,
+                )
+                self.task_lock.release()
+                logging.info(f"Finished measurement sweep")
+                callback(True)
+
+            self.task = gevent.spawn(task)
+            return
+
+        logging.error(f"Failed to start measurement lock: Another task is already running")
+        callback(False)
+        return 
 
 class ControllerApiHandler(Resource):
     def __init__(
         self,
         channel: EventChannel,
+        monitor_channel: EventChannel,
         controller: Controller,
     ):
-        # SSE event channel for pushing data responses to frontend
+        # main SSE event channel for pushing data responses to frontend
         self.channel = channel
+        # SSE event channel for push data responses to monitoring frontend
+        self.monitor_channel = monitor_channel
         # instrument controller class
         self.controller = controller
         # put request handlers
         self.put_handlers = {
+            "run_measurement": self.run_measurement,
             "connect_b1500": self.connect_b1500,
             "disconnect_b1500": self.disconnect_b1500,
             "set_b1500_gpib_address": self.set_b1500_gpib_address,
@@ -302,6 +372,104 @@ class ControllerApiHandler(Resource):
             "set_user_setting": self.set_user_setting,
         }
     
+    def run_measurement(
+        self,
+        user,
+        current_die_x,
+        current_die_y,
+        device_x,
+        device_y,
+        device_row,
+        device_col,
+        data_folder,
+        program,
+        program_config,
+        sweep,
+        sweep_config,
+        sweep_save_data,
+    ):
+        """Run measurement task."""
+        print("BEGIN MEASUREMENT PARSING")
+        print("user =", user)
+        print("current_die_x =", current_die_x)
+        print("current_die_y =", current_die_y)
+        print("device_x =", device_x)
+        print("device_y =", device_y)
+        print("device_row =", device_row)
+        print("device_col =", device_col)
+        print("data_folder =", data_folder)
+        print("program =", program)
+        print("program_config =", program_config)
+        print("sweep =", sweep)
+        print("sweep_config =", sweep_config)
+        print("sweep_save_data =", sweep_save_data)
+
+        # get program and sweep
+        instr_program = get_measurement_program(program)
+        instr_sweep = get_measurement_sweep(sweep)
+        if instr_program is None or instr_sweep is None:
+            logging.error("Invalid program or sweep")
+            return self.signal_measurement_failed("Invalid program or sweep")
+        
+        # parse program config and sweep config
+        try:
+            program_config_dict = json.loads(program_config)
+        except Exception as err:
+            logging.error(f"Invalid program config: {err}")
+            return self.signal_measurement_failed("Invalid program config")
+        
+        try:
+            sweep_config_dict = json.loads(sweep_config)
+        except Exception as err:
+            logging.error(f"Invalid sweep config: {err}")
+            return self.signal_measurement_failed("Invalid sweep config")
+        
+        # run internal measurement task
+        self.controller.run_measurement(
+            user=user,
+            current_die_x=current_die_x,
+            current_die_y=current_die_y,
+            device_x=device_x,
+            device_y=device_y,
+            device_row=device_row,
+            device_col=device_col,
+            data_folder=data_folder,
+            program=instr_program,
+            program_config=program_config_dict,
+            sweep=instr_sweep,
+            sweep_config=sweep_config_dict,
+            sweep_save_data=sweep_save_data,
+            callback=self.signal_measurement_finished,
+        )
+    
+    def signal_measurement_finished(
+        self,
+        success,
+    ):
+        # TODO: better status response about measurement
+        if success:
+            status = "success"
+        else:
+            status = "error"
+        
+        self.channel.publish({
+            "msg": "measurement_finish",
+            "data": {
+                "status": status,
+            },
+        })
+
+    def signal_measurement_failed(
+        self,
+        error,
+    ):
+        self.channel.publish({
+            "msg": "measurement_error",
+            "data": {
+                "error": error,
+            },
+        })
+
     def connect_b1500(self, gpib_address):
         idn = self.controller.connect_b1500(gpib_address)
         logging.info(f"Connected (GPIB: {gpib_address}): {idn}")
@@ -367,7 +535,9 @@ class ControllerApiHandler(Resource):
         return {
             "gpib_b1500": self.controller.settings.gpib_b1500,
             "gpib_cascade": self.controller.settings.gpib_cascade,
-            "users": self.controller.settings.users
+            "users": self.controller.settings.users,
+            "programs": MEASUREMENT_PROGRAMS,
+            "sweeps": MEASUREMENT_SWEEPS,
         }
 
     def put(self):
@@ -389,6 +559,7 @@ class ControllerApiHandler(Resource):
             logging.info(f"PUT {args}")
             if args["msg"] in self.put_handlers:
                 kwargs = args["data"]
+                print(kwargs)
                 self.put_handlers[args["msg"]](**kwargs)
         except Exception as exception:
             logging.error(exception)

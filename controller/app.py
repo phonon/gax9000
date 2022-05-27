@@ -121,6 +121,7 @@ def create_server(
 
     api.add_resource(ControllerApiHandler, "/api/controller", resource_class_kwargs={
         "channel": channel_controller,
+        "monitor_channel": channel_monitor,
         "controller": controller,
     })
     api.add_resource(MonitorApiHandler, "/api/monitor", resource_class_kwargs={
