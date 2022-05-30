@@ -20,6 +20,8 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             "v_ds": [-0.05, -0.4, -1.2],
         }
     
-    def run(self):
+    def run(self) -> dict:
         """Run the program."""
-        pass
+        return {
+
+        }

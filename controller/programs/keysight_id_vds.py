@@ -62,7 +62,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         v_ds=np.arange(-1.2, 1.2, 0.1),
         negate_id=False,
         sweep_direction="fr",
-    ):
+    ) -> dict:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
         print(f"probe_source = {probe_source}")
@@ -98,6 +98,10 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
         # compliance values, and so on) and sets channels to 0 voltage.
         instr_b1500.write(f"DZ")
+
+        return {
+            
+        }
 
 
 

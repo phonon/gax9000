@@ -15,7 +15,7 @@ class ProgramDebug(MeasurementProgram):
     
     def run(
         **kwargs
-    ):
+    ) -> dict:
         """Run the program."""
         print("RUNNING DEBUG PROGRAM")
 

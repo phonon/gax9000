@@ -26,8 +26,10 @@ class MeasurementProgram(ABC):
 
     @staticmethod
     @abstractmethod
-    def run(**kwargs):
-        """Run the program."""
+    def run(**kwargs) -> dict:
+        """Run the program and returns dict with result data.
+        The result data is program specific and must be manually
+        parsed by caller for different programs."""
         pass
     
     @staticmethod

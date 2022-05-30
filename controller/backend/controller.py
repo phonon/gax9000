@@ -402,6 +402,12 @@ class Controller():
         self.set_measurement_program_config(user, program.name, program_config)
         self.set_measurement_sweep_config(user, sweep.name, sweep_config)
 
+        # verify data folder exists
+        if sweep_save_data and not os.path.exists(data_folder):
+            logging.error(f"Data folder {data_folder} does not exist. Cancelling measurement sweep.")
+            callback(False)
+            return
+
         # try acquire instrument task lock
         if self.task_lock.acquire(blocking=False, timeout=None):
             

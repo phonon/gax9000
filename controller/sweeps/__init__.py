@@ -2,6 +2,7 @@
 Define interface for measurement sweeps.
 """
 import logging
+import json
 from abc import ABC, abstractmethod
 
 # list of available sweep types (hardcoded)
@@ -16,7 +17,41 @@ class MeasurementSweep(ABC):
 
     # sweep name, must match name in `get(name)`
     name = None
+    
+    @staticmethod
+    def export_metadata(
+        path,
+        user,
+        sweep,
+        sweep_config,
+        die_x,
+        die_y,
+        device_row,
+        device_col,
+        device_dx,
+        device_dy,
+        data_folder,
+        program_name,
+        program_config,
+    ):
+        metadata = {
+            "user": user,
+            "sweep": sweep,
+            "sweep_config": sweep_config,
+            "die_x": die_x,
+            "die_y": die_y,
+            "device_row": device_row,
+            "device_col": device_col,
+            "device_dx": device_dx,
+            "device_dy": device_dy,
+            "data_folder": data_folder,
+            "program": program_name,
+            "program_config": program_config,
+        }
 
+        with open(path, "w+") as f:
+            json.dump(metadata, f, indent=2)
+    
     @staticmethod
     @abstractmethod
     def default_config():
