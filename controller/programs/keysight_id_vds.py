@@ -1,4 +1,7 @@
+import traceback
 from dis import Instruction
+from enum import Enum, auto
+from multiprocessing.sharedctypes import Value
 import numpy as np
 import gevent
 import pyvisa
@@ -60,6 +63,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         probe_sub=9,
         v_gs=np.array([0.050, 1.2]),
         v_ds=np.arange(-1.2, 1.2, 0.1),
+        v_sub=0.0,
         negate_id=False,
         sweep_direction="fr",
     ) -> dict:
@@ -73,36 +77,9 @@ class ProgramKeysightIdVds(MeasurementProgram):
         print(f"negate_id = {negate_id}")
         print(f"sweep_direction = {sweep_direction}")
 
-        id_compliance = 0.100 # 100 mA complience
-        ig_compliance = 0.010 # 10 mA complience
-
-        # reset instrument
-        instr_b1500.write("*RST")
-        
-        # enable channels: CN (pg 4-62)
-        instr_b1500.write(f"CN {probe_sub},{probe_gate},{probe_drain},{probe_source}")
-        query_error(instr_b1500)
-
-        # zero voltage to probes:
-        # DV (pg 4-78) cmd sets DC voltage on channels:
-        #   DV {probe} {vrange} {v} {icompliance}
-        print(f"DV {probe_gate},0,0,{ig_compliance}")
-        instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
-        query_error(instr_b1500)
-        instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
-        query_error(instr_b1500)
-        instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
-        query_error(instr_b1500)
-
-        # zero voltages: DZ (pg 4-79)
-        # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
-        # compliance values, and so on) and sets channels to 0 voltage.
-        instr_b1500.write(f"DZ")
-
         return {
             
         }
-
 
 
 if __name__ == "__main__":
@@ -130,6 +107,8 @@ if __name__ == "__main__":
         except Exception as err:
             print(f"Measurement FAILED: {err}")
             instr_b1500.write(f"DZ") # ensure channels are zero-d
+            print(traceback.format_exc())
+
         
     task = gevent.spawn(run_measurement)
     gevent.joinall([task])
