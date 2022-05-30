@@ -10,22 +10,18 @@ MEASUREMENT_SWEEPS = [
     "single",
 ]
 
-def get_measurement_sweep(name):
-    """Return sweep by name."""
-    s = name.lower()
-    if s == "array":
-        from controller.sweeps.array import SweepArray
-        return SweepArray
-    elif s == "single":
-        from controller.sweeps.single import SweepSingle
-        return SweepSingle
-    else:
-        logging.error(f"Unknown sweep type: {name}")
-        return None
-
 
 class MeasurementSweep(ABC):
     """Interface for measurement sweeps."""
+
+    # sweep name, must match name in `get(name)`
+    name = None
+
+    @staticmethod
+    @abstractmethod
+    def default_config():
+        """Return default `sweep_config` argument in `run` as a dict."""
+        return {}
     
     @staticmethod
     @abstractmethod
@@ -45,3 +41,17 @@ class MeasurementSweep(ABC):
     ):
         """Run the sweep."""
         pass
+    
+    @staticmethod
+    def get(name):
+        """Get measurement sweep class by name."""
+        s = name.lower()
+        if s == "array":
+            from controller.sweeps.array import SweepArray
+            return SweepArray
+        elif s == "single":
+            from controller.sweeps.single import SweepSingle
+            return SweepSingle
+        else:
+            logging.error(f"Unknown sweep type: {name}")
+            return None

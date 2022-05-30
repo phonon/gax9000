@@ -64,7 +64,7 @@ function App({
     // program settings
     const [measurementProgramList, setMeasurementProgramList] = useState([]);
     const [measurementProgram, setMeasurementProgram] = useState("");
-    const [measurementConfig, setMeasurementConfig] = useState(DEFAULT_MEASUREMENT_CONFIG);
+    const [measurementConfig, setMeasurementConfig] = useState("{}");
 
     // sweep settings
     const [sweepList, setSweepList] = useState([]);
@@ -154,6 +154,12 @@ function App({
             setDeviceRow(settings.device_row);
             setDeviceCol(settings.device_col);
             setDataFolder(settings.data_folder);
+        });
+        responseHandlers.set("measurement_program_config", ({config}) => {
+            setMeasurementConfig(JSON.stringify(config, null, 2));
+        });
+        responseHandlers.set("measurement_sweep_config", ({config}) => {
+            setSweepConfig(JSON.stringify(config, null, 2));
         });
         responseHandlers.set("measurement_error", ({error}) => {
             console.error("Measurement failed error", error);
@@ -287,7 +293,7 @@ function App({
                         program={measurementProgram}
                         setProgramLocal={setMeasurementProgram}
                         programConfig={measurementConfig}
-                        setProgramConfig={setMeasurementConfig}
+                        setProgramConfigLocal={setMeasurementConfig}
                         sweepList={sweepList}
                         sweep={sweep}
                         setSweepLocal={setSweep}

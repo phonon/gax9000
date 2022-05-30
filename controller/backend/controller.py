@@ -14,8 +14,8 @@ from gevent.lock import BoundedSemaphore
 import pyvisa
 from flask_restful import Api, Resource, reqparse
 from controller.sse import EventChannel
-from controller.programs import MEASUREMENT_PROGRAMS, MeasurementProgram, get_measurement_program
-from controller.sweeps import MEASUREMENT_SWEEPS, MeasurementSweep, get_measurement_sweep
+from controller.programs import MEASUREMENT_PROGRAMS, MeasurementProgram
+from controller.sweeps import MEASUREMENT_SWEEPS, MeasurementSweep
 
 class UserGlobalSettings():
     """Saved user global config settings."""
@@ -242,7 +242,7 @@ class Controller():
         for username, user in self.users.items():
             if user.save(self.path_users):
                 logging.info(f"Saved user settings: {username}")
-        
+    
     def _task_save_user_settings(self):
         """Internal task that runs in gevent greenlet to periodically
         save dirty user settings."""
@@ -262,6 +262,87 @@ class Controller():
                 logging.warn(f"set_user_setting() Invalid setting: {setting}")
         else:
             logging.warn(f"set_user_setting() Invalid user: {user}")
+    
+    def get_measurement_program_config(self, username, program):
+        """Get measurement program config for user and program.
+        Returns either user's current program config, or generates new
+        default config for the program.
+        """
+        print(username, program)
+        if username in self.users:
+            # get/create program config path if it does not exist
+            path_user_programs = os.path.join(self.path_users, username, "program")
+            if not os.path.exists(path_user_programs):
+                os.makedirs(path_user_programs)
+            
+            path_program = os.path.join(path_user_programs, program + ".json")
+            if os.path.exists(path_program):
+                with open(path_program, "r") as f:
+                    return json.load(f)
+            else: # generate default user settings
+                logging.info(f"Creating default program {program}.json config for {username} at: {path_program}")
+                config = MeasurementProgram.get(program).default_config()
+                with open(path_program, "w+") as f:
+                    json.dump(config, f, indent=2)
+                return config
+
+        return None
+
+    def set_measurement_program_config(self, username, program, config):
+        """Set measurement program config for user and program."""
+        print(username, program, config)
+        if username in self.users:
+            # get/create program config path if it does not exist
+            path_user_programs = os.path.join(self.path_users, username, "program")
+            if not os.path.exists(path_user_programs):
+                os.makedirs(path_user_programs)
+            
+            path_program = os.path.join(path_user_programs, program + ".json")
+            with open(path_program, "w+") as f:
+                if isinstance(config, str):
+                    f.write(config)
+                else:
+                    json.dump(config, f, indent=2)
+    
+    def get_measurement_sweep_config(self, username, sweep):
+        """Get measurement program config for user and program.
+        Returns either user's current sweep config, or generates new
+        default config for the sweep.
+        """
+        if username in self.users:
+            # get/create program config path if it does not exist
+            path_user_sweeps = os.path.join(self.path_users, username, "sweep")
+            if not os.path.exists(path_user_sweeps):
+                os.makedirs(path_user_sweeps)
+            
+            path_sweep = os.path.join(path_user_sweeps, sweep + ".json")
+            if os.path.exists(path_sweep):
+                with open(path_sweep, "r") as f:
+                    return json.load(f)
+            else: # generate default user settings
+                logging.info(f"Creating default sweep {sweep}.json config for {username} at: {path_sweep}")
+                config = MeasurementSweep.get(sweep).default_config()
+                with open(path_sweep, "w+") as f:
+                    json.dump(config, f, indent=2)
+                return config
+
+        return None
+
+    def set_measurement_sweep_config(self, username, sweep, config):
+        """Set measurement program config for user and program."""
+        print(username, sweep, config)
+        if username in self.users:
+            # get/create program config path if it does not exist
+            path_user_sweeps = os.path.join(self.path_users, username, "sweep")
+            if not os.path.exists(path_user_sweeps):
+                os.makedirs(path_user_sweeps)
+            
+            path_sweep = os.path.join(path_user_sweeps, sweep + ".json")
+            with open(path_sweep, "w+") as f:
+                if isinstance(config, str):
+                    f.write(config)
+                else:
+                    json.dump(config, f, indent=2)
 
     def connect_b1500(self, gpib: int):
         """Connect to b1500 instrument resource through GPIB
@@ -317,6 +398,10 @@ class Controller():
         print("sweep_config =", sweep_config)
         print("sweep_save_data =", sweep_save_data)
         
+        # save program and sweep config to disk
+        self.set_measurement_program_config(user, program.name, program_config)
+        self.set_measurement_sweep_config(user, sweep.name, sweep_config)
+
         # try acquire instrument task lock
         if self.task_lock.acquire(blocking=False, timeout=None):
             
@@ -370,6 +455,10 @@ class ControllerApiHandler(Resource):
             "disconnect_cascade": self.disconnect_cascade,
             "get_user_settings": self.get_user_settings,
             "set_user_setting": self.set_user_setting,
+            "get_measurement_program_config": self.get_measurement_program_config,
+            "set_measurement_program_config": self.set_measurement_program_config,
+            "get_measurement_sweep_config": self.get_measurement_sweep_config,
+            "set_measurement_sweep_config": self.set_measurement_sweep_config,
         }
     
     def run_measurement(
@@ -405,8 +494,8 @@ class ControllerApiHandler(Resource):
         print("sweep_save_data =", sweep_save_data)
 
         # get program and sweep
-        instr_program = get_measurement_program(program)
-        instr_sweep = get_measurement_sweep(sweep)
+        instr_program = MeasurementProgram.get(program)
+        instr_sweep = MeasurementSweep.get(sweep)
         if instr_program is None or instr_sweep is None:
             logging.error("Invalid program or sweep")
             return self.signal_measurement_failed("Invalid program or sweep")
@@ -528,6 +617,36 @@ class ControllerApiHandler(Resource):
         """Update a user setting to new value."""
         self.controller.set_user_setting(user, setting, value)
     
+    def get_measurement_program_config(self, user, program):
+        """Get measurement program config for user and program."""
+        config = self.controller.get_measurement_program_config(user, program)
+        if config is not None:
+            self.channel.publish({
+                "msg": "measurement_program_config",
+                "data": {
+                    "config": config,
+                },
+            })
+
+    def set_measurement_program_config(self, user, program, config):
+        """Set measurement program config for user and program."""
+        config = self.controller.set_measurement_program_config(user, program, config)
+    
+    def get_measurement_sweep_config(self, user, sweep):
+        """Get measurement program config for user and program."""
+        config = self.controller.get_measurement_sweep_config(user, sweep)
+        if config is not None:
+            self.channel.publish({
+                "msg": "measurement_sweep_config",
+                "data": {
+                    "config": config,
+                },
+            })
+
+    def set_measurement_sweep_config(self, user, sweep, config):
+        """Set measurement program config for user and program."""
+        config = self.controller.set_measurement_sweep_config(user, sweep, config)
+
     def get(self):
         """Returns global controller config settings."""
         # reload controller settings on page load

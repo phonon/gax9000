@@ -15,14 +15,14 @@ const handleBtnConnect = (axios, msg, address) => {
             gpib_address: address,
         },
     });
-}
+};
 
 const handleBtnDisconnect = (axios, msg) => {
     axios.put("api/controller", {
         msg: msg,
         data: {},
     });
-}
+};
 
 const handleGpibAddressChange = (axios, msg, newAddress, setAddressLocal) => {
     // push gpib address update to controller
@@ -34,7 +34,7 @@ const handleGpibAddressChange = (axios, msg, newAddress, setAddressLocal) => {
     });
     // set address locally in app
     setAddressLocal(newAddress);
-}
+};
 
 /**
  * Instrument GPIB connection bar

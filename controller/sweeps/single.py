@@ -2,6 +2,14 @@ from controller.sweeps import MeasurementSweep
 
 class SweepSingle(MeasurementSweep):
     """Implement a single device sweep."""
+
+    name = "single"
+
+    def default_config():
+        """Return default `sweep_config` argument in `run` as a dict."""
+        return {
+            "programs": [],
+        }
     
     def run(
         user,

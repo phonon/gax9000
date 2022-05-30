@@ -3,6 +3,17 @@ from controller.sweeps import MeasurementSweep
 class SweepArray(MeasurementSweep):
     """Implement an array sweep."""
     
+    name = "array"
+    
+    def default_config():
+        """Return default `sweep_config` argument in `run` as a dict."""
+        return {
+            "num_rows": 1,
+            "num_cols": 1,
+            "sweep_order": "row",
+            "programs": [],
+        }
+    
     def run(
         user,
         sweep_config,

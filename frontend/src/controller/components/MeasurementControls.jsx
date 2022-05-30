@@ -59,7 +59,69 @@ const handleSetUserProfile = (axios, username, setUserLocal) => {
         // to avoid getting stuck with "NaN"
         setValueLocal(newValue);
     }
-}
+};
+
+const handleChangeMeasurementProgram = (axios, user, oldProgram, oldProgramConfig, newProgram, setProgramLocal) => {
+    if ( user === "" ) { // skip empty user
+        return
+    }
+
+    // push current program config to controller
+    // this makes sure any outstanding changes are saved
+    if ( oldProgram !== "" ) {
+        axios.put("api/controller", {
+            msg: "set_measurement_program_config",
+            data: {
+                user: user,
+                program: oldProgram,
+                config: oldProgramConfig,
+            },
+        });
+    }
+
+    // push new program to controller
+    axios.put("api/controller", {
+        msg: "get_measurement_program_config",
+        data: {
+            user: user,
+            program: newProgram,
+        },
+    });
+
+    // set program locally in app
+    setProgramLocal(newProgram);
+};
+
+const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, newSweep, setSweepLocal) => {
+    if ( user === "" ) { // skip empty user
+        return
+    }
+
+    // push current sweep config to controller
+    // this makes sure any outstanding changes are saved
+    if ( oldSweep !== "" ) {
+        axios.put("api/controller", {
+            msg: "set_measurement_sweep_config",
+            data: {
+                user: user,
+                sweep: oldSweep,
+                config: oldSweepConfig,
+            },
+        });
+    }
+
+    // request new sweep config to controller
+    axios.put("api/controller", {
+        msg: "get_measurement_sweep_config",
+        data: {
+            user: user,
+            sweep: newSweep,
+        },
+    });
+
+    // set program locally in app
+    setSweepLocal(newSweep);
+};
 
 /**
  * Measurement controls ui
@@ -75,10 +137,12 @@ export const MeasurementControls = ({
     program,
     setProgramLocal,
     programConfig,
+    setProgramConfigLocal,
     sweepList,
     sweep,
     setSweepLocal,
     sweepConfig,
+    setSweepConfigLocal,
     sweepSaveData,
     setSweepSaveDataLocal,
     measurementRunning,
@@ -184,7 +248,7 @@ export const MeasurementControls = ({
                                         value={program}
                                         label="Program"
                                         size="small"
-                                        onChange={(e) => setProgramLocal(e.target.value)}
+                                        onChange={(e) => handleChangeMeasurementProgram(axios, user, program, programConfig, e.target.value, setProgramLocal)}
                                     >
                                         {programList.map((x) =>
                                             <MenuItem key={x} value={x}>{x}</MenuItem>
@@ -200,7 +264,7 @@ export const MeasurementControls = ({
                                         codeMirrorJsonExtension(),
                                     ]}
                                     onChange={(value, viewUpdate) => {
-                                        console.log('value:', value);
+                                        setProgramConfigLocal(value);
                                     }}
                                 />
                             </Box>
@@ -217,7 +281,7 @@ export const MeasurementControls = ({
                                         value={sweep}
                                         label="Sweep"
                                         size="small"
-                                        onChange={(e) => setSweepLocal(e.target.value)}
+                                        onChange={(e) => handleChangeMeasurementSweep(axios, user, sweep, sweepConfig, e.target.value, setSweepLocal)}
                                     >
                                         {sweepList.map((x) =>
                                             <MenuItem key={x} value={x}>{x}</MenuItem>
@@ -233,7 +297,7 @@ export const MeasurementControls = ({
                                         codeMirrorJsonExtension(),
                                     ]}
                                     onChange={(value, viewUpdate) => {
-                                        console.log('value:', value);
+                                        setSweepConfigLocal(value);
                                     }}
                                 />
                                 

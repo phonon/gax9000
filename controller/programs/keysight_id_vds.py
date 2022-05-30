@@ -31,6 +31,27 @@ class ProgramKeysightIdVds(MeasurementProgram):
     
     """
 
+    name = "keysight_id_vds"
+
+    def default_config():
+        """Return default `run` arguments config as a dict."""
+        return {
+            "probe_gate": 8,
+            "probe_source": 1,
+            "probe_drain": 3,
+            "probe_sub": 9,
+            "v_gs": {
+                "start": -1.2,
+                "stop": 1.2,
+                "step": 0.1,
+            },
+            "v_ds": {
+                "start": 0.0,
+                "stop": 2.0,
+                "step": 0.1,
+            },
+        }
+    
     def run(
         instr_b1500,
         probe_gate=8,

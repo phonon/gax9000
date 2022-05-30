@@ -5,6 +5,14 @@ from controller.programs import MeasurementProgram
 class ProgramDebug(MeasurementProgram):
     """Implement fake debugging program."""
 
+    name = "debug"
+    
+    def default_config():
+        """Return default `run` arguments config as a dict."""
+        return {
+            "v_gs": [0, 1, 2, 3, 4, 5, 6, 7],
+        }
+    
     def run(
         **kwargs
     ):
