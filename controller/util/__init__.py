@@ -34,7 +34,9 @@ def into_sweep_range(v) -> list:
         return v
     elif isinstance(v, dict):
         import numpy as np
-        npoints = 1 + int(abs((v["stop"] - v["start"])/v["step"]))
+        # abs required to ensure no negative points if stop < start
+        # round required due to float precision errors, avoids .9999 npoint values
+        npoints = 1 + int(abs(round((v["stop"] - v["start"])/v["step"])))
         return np.linspace(v["start"], v["stop"], npoints)
     else:
         raise ValueError(f"Sweep range is an invalid format: {v}")

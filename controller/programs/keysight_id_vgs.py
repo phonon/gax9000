@@ -61,7 +61,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         v_gs={
             "start": -1.2,
             "stop": 1.2,
-            "step": 0.1
+            "step": 0.1,
         },
         v_ds=[0.050, 1.2],
         v_sub=0.0,
@@ -315,24 +315,37 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 nbytes = int(instr_b1500.query("NUB?"))
                 print(f"nbytes={nbytes}")
                 buf = instr_b1500.read()
-                print(buf)
+                # print(buf)
+                
+                # parse vals strings into numbers
                 vals = buf.strip().split(",")
                 vals = parse_keysight_str_values(vals)
-                print(vals)
 
-                val_table = []
-                for i, vals_chunk in enumerate(iter_chunks(vals, 7)):
-                    val_table.append([v_ds_val, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
-                    
-                    v_ds_out[idx_bias, idx_dir, i] = v_ds_val
-                    v_gs_out[idx_bias, idx_dir, i] = vals_chunk[6]
-                    i_d_out[idx_bias, idx_dir, i] = vals_chunk[1]
-                    i_s_out[idx_bias, idx_dir, i] = vals_chunk[3]
-                    i_g_out[idx_bias, idx_dir, i] = vals_chunk[5]
-                    # timestamps
-                    time_i_d_out[idx_bias, idx_dir, i] = vals_chunk[0]
-                    time_i_s_out[idx_bias, idx_dir, i] = vals_chunk[2]
-                    time_i_g_out[idx_bias, idx_dir, i] = vals_chunk[4]
+                # values chunked for each measurement point:
+                #   [ [vgs0, id0, ig0] , [vgs1, id1, ig1], ... ]
+                val_chunks = [ x for x in iter_chunks(vals, 7) ]
+
+                # split val chunks into forward/reverse sweep components:
+                if sweep_type == SweepType.FORWARD or sweep_type == SweepType.REVERSE:
+                    sweep_chunks = [val_chunks]
+                elif sweep_type == SweepType.FORWARD_REVERSE or sweep_type == SweepType.REVERSE_FORWARD:
+                    sweep_chunks = [val_chunks[0:num_points], val_chunks[num_points:]]
+                
+                val_table = [] # values to print out to console for display
+
+                for s, sweep_vals in enumerate(sweep_chunks):
+                    for i, vals_chunk in enumerate(sweep_vals):
+                        val_table.append([v_ds_val, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
+                        
+                        v_ds_out[idx_bias, idx_dir + s, i] = v_ds_val
+                        v_gs_out[idx_bias, idx_dir + s, i] = vals_chunk[6]
+                        i_d_out[idx_bias, idx_dir + s, i] = vals_chunk[1]
+                        i_s_out[idx_bias, idx_dir + s, i] = vals_chunk[3]
+                        i_g_out[idx_bias, idx_dir + s, i] = vals_chunk[5]
+                        # timestamps
+                        time_i_d_out[idx_bias, idx_dir + s, i] = vals_chunk[0]
+                        time_i_s_out[idx_bias, idx_dir + s, i] = vals_chunk[2]
+                        time_i_g_out[idx_bias, idx_dir + s, i] = vals_chunk[4]
                 
                 print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
 
@@ -361,20 +374,21 @@ class ProgramKeysightIdVgs(MeasurementProgram):
 if __name__ == "__main__":
     """Tests running the program
     """
-    res = "NCT+5.55189E+00,NCI+0.00005E-09,NAT+5.66104E+00,NAI+0.00000E-09,NHT+5.77022E+00,NHI+0.00010E-09,WHV-1.20000E+00,NCT+5.83624E+00,NCI+0.00000E-09,NAT+5.85902E+00,NAI+0.00000E-09,NHT+5.96819E+00,NHI+0.00015E-09,WHV-1.10000E+00,NCT+6.03426E+00,NCI+0.00000E-09,NAT+6.05703E+00,NAI+0.00010E-09,NHT+6.16623E+00,NHI+0.00000E-09,WHV-1.00000E+00,NCT+6.23234E+00,NCI+0.00000E-09,NAT+6.25518E+00,NAI+0.00000E-09,NHT+6.36435E+00,NHI+0.00010E-09,WHV-0.90000E+00,NCT+6.43042E+00,NCI+0.00005E-09,NAT+6.45328E+00,NAI+0.00005E-09,NHT+6.56246E+00,NHI+0.00005E-09,WHV-0.80000E+00,NCT+6.62855E+00,NCI+0.00015E-09,NAT+6.65140E+00,NAI+0.00005E-09,NHT+6.76060E+00,NHI+0.00010E-09,WHV-0.70000E+00,NCT+6.82667E+00,NCI+0.00000E-09,NAT+6.84944E+00,NAI+0.00000E-09,NHT+6.95864E+00,NHI+0.00015E-09,WHV-0.60000E+00,NCT+7.02471E+00,NCI+0.00010E-09,NAT+7.04756E+00,NAI+0.00005E-09,NHT+7.15675E+00,NHI+0.00010E-09,WHV-0.50000E+00,NCT+7.22284E+00,NCI+0.00005E-09,NAT+7.24569E+00,NAI-0.00010E-09,NHT+7.35487E+00,NHI+0.00000E-09,WHV-0.40000E+00,NCT+7.42094E+00,NCI+0.00010E-09,NAT+7.44379E+00,NAI+0.00015E-09,NHT+7.55299E+00,NHI+0.00010E-09,WHV-0.30000E+00,NCT+7.61906E+00,NCI+0.00005E-09,NAT+7.64190E+00,NAI+0.00010E-09,NHT+7.75107E+00,NHI+0.00015E-09,WHV-0.20000E+00,NCT+7.81712E+00,NCI+0.00000E-09,NAT+7.83997E+00,NAI+0.00010E-09,NHT+7.94907E+00,NHI+0.00005E-09,WHV-0.10000E+00,NCT+8.01521E+00,NCI+0.00000E-09,NAT+8.03806E+00,NAI+0.00010E-09,NHT+8.14722E+00,NHI+0.00015E-09,WHV+0.00000E+00,NCT+8.21331E+00,NCI+0.00000E-09,NAT+8.23608E+00,NAI-0.00005E-09,NHT+8.34523E+00,NHI+0.00000E-09,WHV+0.10000E+00,NCT+8.41130E+00,NCI+0.00000E-09,NAT+8.43407E+00,NAI+0.00010E-09,NHT+8.54324E+00,NHI+0.00015E-09,WHV+0.20000E+00,NCT+8.60933E+00,NCI+0.00000E-09,NAT+8.63209E+00,NAI+0.00015E-09,NHT+8.74126E+00,NHI+0.00015E-09,WHV+0.30000E+00,NCT+8.80730E+00,NCI+0.00000E-09,NAT+8.83016E+00,NAI+0.00005E-09,NHT+8.93933E+00,NHI+0.00010E-09,WHV+0.40000E+00,NCT+9.00542E+00,NCI+0.00010E-09,NAT+9.02826E+00,NAI+0.00000E-09,NHT+9.13741E+00,NHI+0.00015E-09,WHV+0.50000E+00,NCT+9.20348E+00,NCI+0.00000E-09,NAT+9.22632E+00,NAI+0.00010E-09,NHT+9.33545E+00,NHI+0.00005E-09,WHV+0.60000E+00,NCT+9.40154E+00,NCI+0.00000E-09,NAT+9.42431E+00,NAI+0.00000E-09,NHT+9.53348E+00,NHI+0.00010E-09,WHV+0.70000E+00,NCT+9.59954E+00,NCI-0.00005E-09,NAT+9.62241E+00,NAI+0.00010E-09,NHT+9.73154E+00,NHI+0.00000E-09,WHV+0.80000E+00,NCT+9.79756E+00,NCI+0.00010E-09,NAT+9.82043E+00,NAI+0.00005E-09,NHT+9.92957E+00,NHI+0.00015E-09,WHV+0.90000E+00,NCT+9.99564E+00,NCI+0.00010E-09,NAT+1.00184E+01,NAI+0.00015E-09,NHT+1.01276E+01,NHI+0.00000E-09,WHV+1.00000E+00,NCT+1.01936E+01,NCI+0.00005E-09,NAT+1.02165E+01,NAI+0.00015E-09,NHT+1.03256E+01,NHI+0.00015E-09,WHV+1.10000E+00,NCT+1.03917E+01,NCI+0.00000E-09,NAT+1.04145E+01,NAI+0.00005E-09,NHT+1.05236E+01,NHI+0.00005E-09,EHV+1.20000E+00"
-    print(res)
-    vals = res.strip().split(",")
-    vals = parse_keysight_str_values(vals)
-    print(vals)
+    from scipy.io import savemat
+    # res = "NCT+5.55189E+00,NCI+0.00005E-09,NAT+5.66104E+00,NAI+0.00000E-09,NHT+5.77022E+00,NHI+0.00010E-09,WHV-1.20000E+00,NCT+5.83624E+00,NCI+0.00000E-09,NAT+5.85902E+00,NAI+0.00000E-09,NHT+5.96819E+00,NHI+0.00015E-09,WHV-1.10000E+00,NCT+6.03426E+00,NCI+0.00000E-09,NAT+6.05703E+00,NAI+0.00010E-09,NHT+6.16623E+00,NHI+0.00000E-09,WHV-1.00000E+00,NCT+6.23234E+00,NCI+0.00000E-09,NAT+6.25518E+00,NAI+0.00000E-09,NHT+6.36435E+00,NHI+0.00010E-09,WHV-0.90000E+00,NCT+6.43042E+00,NCI+0.00005E-09,NAT+6.45328E+00,NAI+0.00005E-09,NHT+6.56246E+00,NHI+0.00005E-09,WHV-0.80000E+00,NCT+6.62855E+00,NCI+0.00015E-09,NAT+6.65140E+00,NAI+0.00005E-09,NHT+6.76060E+00,NHI+0.00010E-09,WHV-0.70000E+00,NCT+6.82667E+00,NCI+0.00000E-09,NAT+6.84944E+00,NAI+0.00000E-09,NHT+6.95864E+00,NHI+0.00015E-09,WHV-0.60000E+00,NCT+7.02471E+00,NCI+0.00010E-09,NAT+7.04756E+00,NAI+0.00005E-09,NHT+7.15675E+00,NHI+0.00010E-09,WHV-0.50000E+00,NCT+7.22284E+00,NCI+0.00005E-09,NAT+7.24569E+00,NAI-0.00010E-09,NHT+7.35487E+00,NHI+0.00000E-09,WHV-0.40000E+00,NCT+7.42094E+00,NCI+0.00010E-09,NAT+7.44379E+00,NAI+0.00015E-09,NHT+7.55299E+00,NHI+0.00010E-09,WHV-0.30000E+00,NCT+7.61906E+00,NCI+0.00005E-09,NAT+7.64190E+00,NAI+0.00010E-09,NHT+7.75107E+00,NHI+0.00015E-09,WHV-0.20000E+00,NCT+7.81712E+00,NCI+0.00000E-09,NAT+7.83997E+00,NAI+0.00010E-09,NHT+7.94907E+00,NHI+0.00005E-09,WHV-0.10000E+00,NCT+8.01521E+00,NCI+0.00000E-09,NAT+8.03806E+00,NAI+0.00010E-09,NHT+8.14722E+00,NHI+0.00015E-09,WHV+0.00000E+00,NCT+8.21331E+00,NCI+0.00000E-09,NAT+8.23608E+00,NAI-0.00005E-09,NHT+8.34523E+00,NHI+0.00000E-09,WHV+0.10000E+00,NCT+8.41130E+00,NCI+0.00000E-09,NAT+8.43407E+00,NAI+0.00010E-09,NHT+8.54324E+00,NHI+0.00015E-09,WHV+0.20000E+00,NCT+8.60933E+00,NCI+0.00000E-09,NAT+8.63209E+00,NAI+0.00015E-09,NHT+8.74126E+00,NHI+0.00015E-09,WHV+0.30000E+00,NCT+8.80730E+00,NCI+0.00000E-09,NAT+8.83016E+00,NAI+0.00005E-09,NHT+8.93933E+00,NHI+0.00010E-09,WHV+0.40000E+00,NCT+9.00542E+00,NCI+0.00010E-09,NAT+9.02826E+00,NAI+0.00000E-09,NHT+9.13741E+00,NHI+0.00015E-09,WHV+0.50000E+00,NCT+9.20348E+00,NCI+0.00000E-09,NAT+9.22632E+00,NAI+0.00010E-09,NHT+9.33545E+00,NHI+0.00005E-09,WHV+0.60000E+00,NCT+9.40154E+00,NCI+0.00000E-09,NAT+9.42431E+00,NAI+0.00000E-09,NHT+9.53348E+00,NHI+0.00010E-09,WHV+0.70000E+00,NCT+9.59954E+00,NCI-0.00005E-09,NAT+9.62241E+00,NAI+0.00010E-09,NHT+9.73154E+00,NHI+0.00000E-09,WHV+0.80000E+00,NCT+9.79756E+00,NCI+0.00010E-09,NAT+9.82043E+00,NAI+0.00005E-09,NHT+9.92957E+00,NHI+0.00015E-09,WHV+0.90000E+00,NCT+9.99564E+00,NCI+0.00010E-09,NAT+1.00184E+01,NAI+0.00015E-09,NHT+1.01276E+01,NHI+0.00000E-09,WHV+1.00000E+00,NCT+1.01936E+01,NCI+0.00005E-09,NAT+1.02165E+01,NAI+0.00015E-09,NHT+1.03256E+01,NHI+0.00015E-09,WHV+1.10000E+00,NCT+1.03917E+01,NCI+0.00000E-09,NAT+1.04145E+01,NAI+0.00005E-09,NHT+1.05236E+01,NHI+0.00005E-09,EHV+1.20000E+00"
+    # print(res)
+    # vals = res.strip().split(",")
+    # vals = parse_keysight_str_values(vals)
+    # print(vals)
 
-    val_table = []
-    for vals_chunk in iter_chunks(vals, 7):
-        print(vals_chunk)
-        val_table.append(["0.05", vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
+    # val_table = []
+    # for vals_chunk in iter_chunks(vals, 7):
+    #     print(vals_chunk)
+    #     val_table.append(["0.05", vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
     
-    print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
+    # print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
 
-    exit()
+    # exit()
 
     rm = pyvisa.ResourceManager()
     print(rm.list_resources())
@@ -391,9 +405,11 @@ if __name__ == "__main__":
     def run_measurement():
         print("RUNNING TASK")
         try:
-            ProgramKeysightIdVgs.run(
+            result = ProgramKeysightIdVgs.run(
                 instr_b1500=instr_b1500,
             )
+            # print(result)
+            savemat("keysight_id_vgs.mat", result, appendmat=False)
         except Exception as err:
             print(f"Measurement FAILED: {err}")
             instr_b1500.write(f"DZ") # ensure channels are zero-d
