@@ -61,6 +61,45 @@ const handleSetUserSetting = (axios, user, setting, type, oldValue, newValue, se
     }
 }
 
+const handleMoveChuckRelative = (axios, dxExpr, dyExpr) => {
+    // Parse dx_expr and dy_expr using `eval`.
+    // This is to allow expressions like `10*240` to be used
+    // since its convenient to be able to use expressions
+    // when moving across a die (e.g. across an array of rows/cols).
+
+    // try to eval, throw and print stacktrace if invalid
+    let dx;
+    let dy;
+    try {
+        dx = eval(dxExpr);
+    } catch ( err ) {
+        console.error(err);
+        return;
+    }
+
+    try {
+        dy = eval(dyExpr);
+    } catch ( err ) {
+        console.error(err);
+        return;
+    }
+
+    console.log("dx", dx, "dy", dy);
+
+    if ( isValidNumber(dx) && isValidNumber(dy) ) {
+        axios.put("api/controller", {
+            msg: "move_chuck_relative",
+            data: {
+                dx: dx,
+                dy: dy,
+            },
+        });
+    } else {
+        console.error(`dx or dy is not a valid number: dx=${dx} (${typeof dx}), dy=${dy} (${typeof dy})`);
+    }
+
+}
+
 /**
  * Wafer controller
  */
@@ -227,7 +266,11 @@ export const WaferControls = ({
                             {/* controls: top row */}
                             <Grid item xs={4}/>
                             <Grid item xs={4}>
-                                <Button variant="outlined" color="primary">
+                                <Button
+                                    variant="outlined"
+                                    color="primary"
+                                    onClick={() => handleMoveChuckRelative(axios, "0", String(deviceY))}
+                                >
                                     🡹
                                 </Button>
                             </Grid>
@@ -235,7 +278,11 @@ export const WaferControls = ({
 
                             {/* controls: middle row */}
                             <Grid item xs={4}>
-                                <Button variant="outlined" color="primary">
+                                <Button
+                                    variant="outlined"
+                                    color="primary"
+                                    onClick={() => handleMoveChuckRelative(axios, "-" + String(deviceX), "0")}
+                                >
                                     🡸
                                 </Button>
                             </Grid>
@@ -243,7 +290,11 @@ export const WaferControls = ({
                             <Grid item xs={4}/>
 
                             <Grid item xs={4}>
-                                <Button variant="outlined" color="primary">
+                                <Button 
+                                    variant="outlined"
+                                    color="primary"
+                                    onClick={() => handleMoveChuckRelative(axios, String(deviceX), "0")}
+                                >
                                     🡺
                                 </Button>
                             </Grid>
@@ -263,7 +314,11 @@ export const WaferControls = ({
                             {/* controls: bottom row */}
                             <Grid item xs={4}/>
                             <Grid item xs={4}>
-                                <Button variant="outlined" color="primary">
+                                <Button
+                                    variant="outlined"
+                                    color="primary"
+                                    onClick={() => handleMoveChuckRelative(axios, "0", "-" + String(deviceY))}
+                                >
                                     🡻
                                 </Button>
                             </Grid>

@@ -50,7 +50,6 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             },
             "v_ds": [-0.05, -1.2],
         }
-    
 
     def run(
         instr_b1500,

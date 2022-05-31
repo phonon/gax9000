@@ -1,9 +1,9 @@
 
 // https://stackoverflow.com/questions/175739/how-can-i-check-if-a-string-is-a-valid-number
 export function isNumeric(val) {
-    if ( typeof str !== "number" && !isNaN(val) ) return true // we only process strings!  
+    if ( typeof val !== "number" && typeof val !== "string" ) return false; // only numbers and strings
     return !isNaN(val) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
-           !isNaN(parseFloat(val)) // ...and ensure strings of whitespace fail
+           !isNaN(parseFloat(val)); // ...and ensure strings of whitespace fail
 }
 
 /**

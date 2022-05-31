@@ -365,6 +365,13 @@ class Controller():
     def disconnect_cascade(self):
         """Disconnect from cascade instrument."""
         pass
+    
+    def move_chuck_relative(self, dx, dy):
+        """Moves cascade autoprobe chuck relative to current location
+        by (dx, dy).
+        """
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.write(f"MoveChuck {dx} {dy} R Y 100")
 
     def run_measurement(
         self,
@@ -465,6 +472,7 @@ class ControllerApiHandler(Resource):
             "set_measurement_program_config": self.set_measurement_program_config,
             "get_measurement_sweep_config": self.get_measurement_sweep_config,
             "set_measurement_sweep_config": self.set_measurement_sweep_config,
+            "move_chuck_relative": self.move_chuck_relative,
         }
     
     def run_measurement(
@@ -652,6 +660,10 @@ class ControllerApiHandler(Resource):
     def set_measurement_sweep_config(self, user, sweep, config):
         """Set measurement program config for user and program."""
         config = self.controller.set_measurement_sweep_config(user, sweep, config)
+
+    def move_chuck_relative(self, dx, dy):
+        """Move chuck relative to current position."""
+        self.controller.move_chuck_relative(dx, dy)
 
     def get(self):
         """Returns global controller config settings."""
