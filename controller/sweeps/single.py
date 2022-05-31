@@ -37,11 +37,13 @@ class SweepSingle(MeasurementSweep):
         monitor_channel=None,
         signal_cancel=None,
     ):
-        """Run the sweep."""
-        result = program.run(**program_config)
-        sweep_metadata = MeasurementSweep.metadata(
+        """Run the sweep. Just a wrapper around MeasurementSweep.run_single."""
+        t_measurement = timestamp()
+        save_dir = f"gax_r{device_row}_c{device_col}_{program.name}_{t_measurement}"
+
+        MeasurementSweep.run_single(
             user=user,
-            sweep=SweepSingle.name,
+            sweep_name=SweepSingle.name,
             sweep_config=sweep_config,
             die_x=current_die_x,
             die_y=current_die_y,
@@ -50,21 +52,9 @@ class SweepSingle(MeasurementSweep):
             device_dx=device_x,
             device_dy=device_y,
             data_folder=data_folder,
-            program_name=program.name,
+            save_dir=save_dir,
+            save_data=sweep_save_data,
+            program=program,
             program_config=program_config,
+            monitor_channel=monitor_channel,
         )
-    
-        if sweep_save_data and os.path.exists(data_folder):
-            t_measurement = timestamp()
-            save_dir = f"gax_r{device_row}_c{device_col}_{program.name}_{t_measurement}"
-            path_dir = os.path.join(data_folder, save_dir)
-            os.makedirs(path_dir, exist_ok=True)
-
-            path_meta = os.path.join(path_dir, "meta.json")
-            path_result_h5 = os.path.join(path_dir, f"{program.name}.h5")
-            path_result_mat = os.path.join(path_dir, f"{program.name}.mat")
-
-            with open(path_meta, "w+") as f:
-                json.dump(sweep_metadata, f, indent=2)
-            export_hdf5(path_result_h5, result)
-            export_mat(path_result_mat, result)
