@@ -1,12 +1,12 @@
 import traceback
 from dis import Instruction
-from enum import Enum, auto
 from multiprocessing.sharedctypes import Value
 import numpy as np
 import gevent
 import pyvisa
 import logging
-from controller.programs import MeasurementProgram
+from tabulate import tabulate
+from controller.programs import MeasurementProgram, SweepType
 from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks
 
 
@@ -82,53 +82,26 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         v_gs_range = into_sweep_range(v_gs)
         v_ds_range = into_sweep_range(v_ds)
 
+        # maps string of sweep directions like "frf" => list of [SweepType.FORWARD_REVERSE, SweepType.FORWARD]
+        sweeps = SweepType.parse_string(sweep_direction)
+        
+        # prepare output data matrices
+        num_bias = len(v_ds_range)
+        num_sweeps = SweepType.count_total_num_sweeps(sweeps)
+        num_points = len(v_gs_range)
+        data_shape = (num_bias, num_sweeps, num_points)
 
-        # TODO: map sweep_direction to this list
-        class SweepType(Enum):
-            """SweepType enum maps a sweep direction to a sweep setting
-            """
-            FORWARD = auto()          # [start, stop]
-            REVERSE = auto()          # [stop, start]
-            FORWARD_REVERSE = auto()  # [start, stop, start]
-            REVERSE_FORWARD = auto()  # [stop, start, stop]
+        v_ds_out = np.full(data_shape, np.nan)
+        v_gs_out = np.full(data_shape, np.nan)
+        i_d_out = np.full(data_shape, np.nan)
+        i_s_out = np.full(data_shape, np.nan)
+        i_g_out = np.full(data_shape, np.nan)
+        # timestamps
+        time_i_d_out = np.full(data_shape, np.nan)
+        time_i_s_out = np.full(data_shape, np.nan)
+        time_i_g_out = np.full(data_shape, np.nan)
 
-            def b1500_wv_sweep_command(self, ch, range, start, stop, steps, icomp, pcomp):
-                """This returns b1500 GPIB WV voltage sweep mode command (4-250, pg 570):
-                    WV ch,mode,range,start,stop,step[,Icomp[,Pcomp]]
-                Parameters:
-                - ch: SMU channel
-                - range: ranging type for staircase (Table 4-4)
-                - start: start voltage
-                - stop: stop voltage
-                - steps: steps in staircase sweep
-                - icomp: current compliance in [A]
-                - pcomp: power compliance in [W], resolution 0.001 W
-
-                The SweepType sets the mode for the sweep:
-                    1: linear sweep, single-stair start to stop
-                    2: log sweep, single-stair start to stop
-                    3: linear sweep, double-stair start to stop to start
-                    4: log sweep, double-stair, start to stop to start
-                """
-                if self == SweepType.FORWARD:
-                    mode = 1
-                    return f"WV {ch},{mode},{range},{start},{stop},{steps},{icomp},{pcomp}"
-                elif self == SweepType.REVERSE:
-                    mode = 1
-                    return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp},{pcomp}"
-                elif self == SweepType.FORWARD_REVERSE:
-                    mode = 3
-                    return f"WV {ch},{mode},{range},{start},{stop},{steps},{icomp},{pcomp}"
-                elif self == SweepType.REVERSE_FORWARD:
-                    mode = 3
-                    return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp},{pcomp}"
-                else:
-                    raise ValueError(f"Invalid SweepType: {self}")
-
-        sweeps = [
-            SweepType.FORWARD,
-        ]
-
+        # measurement compliance settings
         id_compliance = 0.100 # 100 mA complience
         ig_compliance = 0.010 # 10 mA complience
         pow_compliance = abs(id_compliance * np.max(v_ds)) # power compliance [W]
@@ -293,59 +266,79 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         query_error(instr_b1500)
         
         # ===========================================================
-        # PERFORM SWEEP FOR EACH VDS
+        # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
         # ===========================================================
-        for v_ds_val in v_ds_range:
-            print(f"==============================")
-            print(f"Measuring step (Vds = {v_ds_val} V)...")
-            print(f"------------------------------")
-            
-            # write voltage staircase waveform
-            wv_range_mode = 0 # AUTO
-            instr_b1500.write(sweeps[0].b1500_wv_sweep_command(
-                ch=probe_gate,
-                range=wv_range_mode,
-                start=v_gs_range[0],
-                stop=v_gs_range[-1],
-                steps=len(v_gs_range),
-                icomp=id_compliance,
-                pcomp=pow_compliance,
-            ))
-            query_error(instr_b1500)
-            
-            # write drain bias
-            instr_b1500.write(f"DV {probe_drain},0,{v_ds_val},{id_compliance}")
-            query_error(instr_b1500)
-            
-            # write bulk bias
-            instr_b1500.write(f"DV {probe_sub},0,{v_sub},{id_compliance}")
-            query_error(instr_b1500)
-            
-            # execute and wait for data response
-            instr_b1500.write("XE")
+        for idx_bias, v_ds_val in enumerate(v_ds_range):
+            for idx_dir, sweep_type in SweepType.iter_with_sweep_index(sweeps):
+                print(f"==============================")
+                print(f"Measuring step (Vds = {v_ds_val} V)...")
+                print(f"------------------------------")
+                
+                # write voltage staircase waveform
+                wv_range_mode = 0 # AUTO
+                instr_b1500.write(sweep_type.b1500_wv_sweep_command(
+                    ch=probe_gate,
+                    range=wv_range_mode,
+                    start=v_gs_range[0],
+                    stop=v_gs_range[-1],
+                    steps=len(v_gs_range),
+                    icomp=id_compliance,
+                    pcomp=pow_compliance,
+                ))
+                query_error(instr_b1500)
+                
+                # write drain bias
+                instr_b1500.write(f"DV {probe_drain},0,{v_ds_val},{id_compliance}")
+                query_error(instr_b1500)
+                
+                # write bulk bias
+                instr_b1500.write(f"DV {probe_sub},0,{v_sub},{id_compliance}")
+                query_error(instr_b1500)
+                
+                # execute and wait for data response
+                instr_b1500.write("XE")
 
-            # set timeout (milliseconds)
-            instr_b1500.timeout = 60 * 1000
-            opc = instr_b1500.query("*OPC?")
-            instr_b1500.timeout = 10 * 1000
-            query_error(instr_b1500)
-            
-            # zero probes after measurement
-            instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
-            instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
-            instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
-            instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
-            query_error(instr_b1500)
-            
-            # number of bytes in output data buffer
-            nbytes = int(instr_b1500.query("NUB?"))
-            print(f"nbytes={nbytes}")
-            rsp = instr_b1500.read()
-            print(rsp)
-            
-            print("------------------------------")
-            print(f"Measuring step (Vds = {v_ds_val} V")
-            print("==============================")
+                # set timeout (milliseconds)
+                instr_b1500.timeout = 60 * 1000
+                _opc = instr_b1500.query("*OPC?")
+                instr_b1500.timeout = 10 * 1000
+                query_error(instr_b1500)
+                
+                # zero probes after measurement
+                instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
+                instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
+                instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
+                instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
+                query_error(instr_b1500)
+                
+                # number of bytes in output data buffer
+                nbytes = int(instr_b1500.query("NUB?"))
+                print(f"nbytes={nbytes}")
+                buf = instr_b1500.read()
+                print(buf)
+                vals = buf.strip().split(",")
+                vals = parse_keysight_str_values(vals)
+                print(vals)
+
+                val_table = []
+                for i, vals_chunk in enumerate(iter_chunks(vals, 7)):
+                    val_table.append([v_ds_val, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
+                    
+                    v_ds_out[idx_bias, idx_dir, i] = v_ds_val
+                    v_gs_out[idx_bias, idx_dir, i] = vals_chunk[6]
+                    i_d_out[idx_bias, idx_dir, i] = vals_chunk[1]
+                    i_s_out[idx_bias, idx_dir, i] = vals_chunk[3]
+                    i_g_out[idx_bias, idx_dir, i] = vals_chunk[5]
+                    # timestamps
+                    time_i_d_out[idx_bias, idx_dir, i] = vals_chunk[0]
+                    time_i_s_out[idx_bias, idx_dir, i] = vals_chunk[2]
+                    time_i_g_out[idx_bias, idx_dir, i] = vals_chunk[4]
+                
+                print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
+
+                print("------------------------------")
+                print(f"Measuring step (Vds = {v_ds_val} V")
+                print("==============================")
 
         # zero voltages: DZ (pg 4-79)
         # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
@@ -353,7 +346,14 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         instr_b1500.write(f"DZ")
 
         return {
-            
+            "v_ds": v_ds_out,
+            "v_gs": v_gs_out,
+            "i_d": i_d_out,
+            "i_s": i_s_out,
+            "i_g": i_g_out,
+            "time_i_d": time_i_d_out,
+            "time_i_s": time_i_s_out,
+            "time_i_g": time_i_g_out,
         }
 
 
@@ -367,8 +367,12 @@ if __name__ == "__main__":
     vals = parse_keysight_str_values(vals)
     print(vals)
 
+    val_table = []
     for vals_chunk in iter_chunks(vals, 7):
         print(vals_chunk)
+        val_table.append(["0.05", vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
+    
+    print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
 
     exit()
 
