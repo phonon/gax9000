@@ -449,30 +449,45 @@ class Controller():
             self.signal_cancel_task.reset()
 
             def task():
-                logging.info(f"Beginning measurement sweep: {sweep}")
-                sweep.run(
-                    user=user,
-                    sweep_config=sweep_config,
-                    sweep_save_data=sweep_save_data,
-                    current_die_x=current_die_x,
-                    current_die_y=current_die_y,
-                    device_x=device_x,
-                    device_y=device_y,
-                    device_row=device_row,
-                    device_col=device_col,
-                    data_folder=data_folder,
-                    program=program,
-                    program_config=program_config,
-                    monitor_channel=self.monitor_channel,
-                    signal_cancel=self.signal_cancel_task,
-                )
-                self.task_lock.release()
+                status = False # measurement result status: TODO replace with something better
 
-                # reset cancel task signal
+                logging.info(f"Beginning measurement sweep: {sweep}")
+
+                try:
+                    sweep.run(
+                        user=user,
+                        sweep_config=sweep_config,
+                        sweep_save_data=sweep_save_data,
+                        current_die_x=current_die_x,
+                        current_die_y=current_die_y,
+                        device_x=device_x,
+                        device_y=device_y,
+                        device_row=device_row,
+                        device_col=device_col,
+                        data_folder=data_folder,
+                        program=program,
+                        program_config=program_config,
+                        monitor_channel=self.monitor_channel,
+                        signal_cancel=self.signal_cancel_task,
+                    )
+                    status = True # successfully finished
+                except Exception as err:
+                    logging.error(f"Measurement FAILED: {err}")
+                    logging.error(traceback.format_exc())
+                    if self.instrument_b1500 is not None:
+                        self.instrument_b1500.write("DZ") # ensure channels are zero-d if measurement ran into error
+                
+                # measurement ended (finished or cancelled)
+                if self.instrument_b1500 is not None:
+                    logging.info("Measurement finished, turning off SMUs with 'CL' signal")
+                    self.instrument_b1500.write("CL")
+
+                # clear task lock and reset cancel task signal
+                self.task_lock.release()
                 self.signal_cancel_task.reset()
 
                 logging.info(f"Finished measurement sweep")
-                callback(True)
+                callback(status)
 
             self.task = gevent.spawn(task)
             return
