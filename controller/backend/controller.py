@@ -155,7 +155,7 @@ class UserProfile():
             measurement_settings={}, # TODO
         )
         
-        
+
 
 class ControllerSettings():
     """Global controller settings. These are saved each time
@@ -179,12 +179,35 @@ class ControllerSettings():
             users=["public"],
         )
 
+class SignalCancelTask():
+    """Object to signal cancelling the current running task."""
+    def __init__(self):
+        self.cancelled = False
+        self.lock = BoundedSemaphore(value=1)
+    
+    def cancel(self, blocking=True):
+        if self.lock.acquire(blocking=blocking, timeout=None):
+            self.cancelled = True
+            self.lock.release()
+        
+    def reset(self, blocking=True):
+        if self.lock.acquire(blocking=blocking, timeout=None):
+            self.cancelled = False
+            self.lock.release()
 
+    def is_cancelled(self, blocking=True):
+        result = False
+        if self.lock.acquire(blocking=blocking, timeout=None):
+            result = self.cancelled
+            self.lock.release()
+        return result
+    
 class Controller():
     def __init__(
         self,
         path_settings: str,
         path_users: str,
+        monitor_channel: EventChannel,
     ):
         """Singleton controller for managing instrument resources.
         """
@@ -194,6 +217,8 @@ class Controller():
         self.instrument_b1500 = None
         # cascade instrument
         self.instrument_cascade = None
+        # channel to broadcast measurement data results
+        self.monitor_channel = monitor_channel
         # controller global settings
         self.path_settings = path_settings
         # do initial controller settings load
@@ -209,6 +234,8 @@ class Controller():
         self.task = None
         # lock on instrument task
         self.task_lock = BoundedSemaphore(value=1)
+        # cancel task signal
+        self.signal_cancel_task = SignalCancelTask()
     
     def load_settings(self):
         """Load controller settings from file."""
@@ -418,6 +445,9 @@ class Controller():
         # try acquire instrument task lock
         if self.task_lock.acquire(blocking=False, timeout=None):
             
+            # reset cancel task signal
+            self.signal_cancel_task.reset()
+
             def task():
                 logging.info(f"Beginning measurement sweep: {sweep}")
                 sweep.run(
@@ -433,8 +463,14 @@ class Controller():
                     data_folder=data_folder,
                     program=program,
                     program_config=program_config,
+                    monitor_channel=self.monitor_channel,
+                    signal_cancel=self.signal_cancel_task,
                 )
                 self.task_lock.release()
+
+                # reset cancel task signal
+                self.signal_cancel_task.reset()
+
                 logging.info(f"Finished measurement sweep")
                 callback(True)
 
@@ -443,7 +479,14 @@ class Controller():
 
         logging.error(f"Failed to start measurement lock: Another task is already running")
         callback(False)
-        return 
+        return
+    
+    def cancel_measurement(self):
+        """Acquire cancel task lock and raise signal to stop measuring.
+        This will stop the measurement after the current program step finishes.
+        """
+        self.signal_cancel_task.cancel()
+
 
 class ControllerApiHandler(Resource):
     def __init__(
@@ -461,6 +504,7 @@ class ControllerApiHandler(Resource):
         # put request handlers
         self.put_handlers = {
             "run_measurement": self.run_measurement,
+            "cancel_measurement": self.cancel_measurement,
             "connect_b1500": self.connect_b1500,
             "disconnect_b1500": self.disconnect_b1500,
             "set_b1500_gpib_address": self.set_b1500_gpib_address,
@@ -544,6 +588,10 @@ class ControllerApiHandler(Resource):
             sweep_save_data=sweep_save_data,
             callback=self.signal_measurement_finished,
         )
+    
+    def cancel_measurement(self):
+        """Cancel measurement task."""
+        self.controller.cancel_measurement()
     
     def signal_measurement_finished(
         self,

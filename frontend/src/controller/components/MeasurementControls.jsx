@@ -147,6 +147,7 @@ export const MeasurementControls = ({
     setSweepSaveDataLocal,
     measurementRunning,
     handleRunMeasurement,
+    handleCancelMeasurement,
 }) => {
 
     // required to run measurement
@@ -334,6 +335,7 @@ export const MeasurementControls = ({
                             fullWidth
                             variant="outlined"
                             color="error"
+                            onClick={handleCancelMeasurement}
                         >
                             Stop
                         </Button>

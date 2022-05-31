@@ -115,6 +115,13 @@ function App({
         setRunConfirmDialog(false);
     };
 
+    const cancelMeasurement = () => {
+        axios.put("api/controller", {
+            msg: "cancel_measurement",
+            data: {},
+        });
+    };
+
     useEffect(() => {
         console.log("<App> Rendered");
 
@@ -303,6 +310,7 @@ function App({
                         setSweepSaveDataLocal={setSweepSaveData}
                         measurementRunning={measurementRunning}
                         handleRunMeasurement={tryRunMeasurement}
+                        handleCancelMeasurement={cancelMeasurement}
                     />
                 </Grid>
             </Grid>

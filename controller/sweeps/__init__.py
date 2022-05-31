@@ -19,8 +19,7 @@ class MeasurementSweep(ABC):
     name = None
     
     @staticmethod
-    def export_metadata(
-        path,
+    def metadata(
         user,
         sweep,
         sweep_config,
@@ -34,7 +33,7 @@ class MeasurementSweep(ABC):
         program_name,
         program_config,
     ):
-        metadata = {
+        return {
             "user": user,
             "sweep": sweep,
             "sweep_config": sweep_config,
@@ -48,9 +47,6 @@ class MeasurementSweep(ABC):
             "program": program_name,
             "program_config": program_config,
         }
-
-        with open(path, "w+") as f:
-            json.dump(metadata, f, indent=2)
     
     @staticmethod
     @abstractmethod
@@ -73,6 +69,8 @@ class MeasurementSweep(ABC):
         data_folder,
         program,
         program_config,
+        monitor_channel=None,
+        signal_cancel=None,
     ):
         """Run the sweep."""
         pass

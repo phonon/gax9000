@@ -1,7 +1,8 @@
 import os
 import logging
+import json
 from controller.sweeps import MeasurementSweep
-from controller.util import timestamp
+from controller.util import timestamp, np_dict_to_list_dict
 from controller.util.io import export_hdf5, export_mat
 
 class SweepArray(MeasurementSweep):
@@ -37,6 +38,8 @@ class SweepArray(MeasurementSweep):
         data_folder,
         program,
         program_config,
+        monitor_channel=None,
+        signal_cancel=None,
     ):
         """Run the sweep."""
 
@@ -54,7 +57,21 @@ class SweepArray(MeasurementSweep):
             """
             logging.info(f"[row={row}, col={col}] Running {program.name}...")
             result = program.run(**program_config)
-
+            sweep_metadata = MeasurementSweep.metadata(
+                user=user,
+                sweep=SweepArray.name,
+                sweep_config=sweep_config,
+                die_x=current_die_x,
+                die_y=current_die_y,
+                device_row=row,
+                device_col=col,
+                device_dx=device_x,
+                device_dy=device_y,
+                data_folder=data_folder,
+                program_name=program.name,
+                program_config=program_config,
+            )
+            
             if sweep_save_data and os.path.exists(data_folder):
                 t_measurement = timestamp()
                 save_dir = f"gax_{row_col_str}_{program.name}_{t_measurement}"
@@ -64,33 +81,35 @@ class SweepArray(MeasurementSweep):
                 path_meta = os.path.join(path_dir, "meta.json")
                 path_result_h5 = os.path.join(path_dir, f"{program.name}.h5")
                 path_result_mat = os.path.join(path_dir, f"{program.name}.mat")
-
-                MeasurementSweep.export_metadata(
-                    path=path_meta,
-                    user=user,
-                    sweep=SweepArray.name,
-                    sweep_config=sweep_config,
-                    die_x=current_die_x,
-                    die_y=current_die_y,
-                    device_row=row,
-                    device_col=col,
-                    device_dx=device_x,
-                    device_dy=device_y,
-                    data_folder=data_folder,
-                    program_name=program.name,
-                    program_config=program_config,
-                )
+                
+                with open(path_meta, "w+") as f:
+                    json.dump(sweep_metadata, f, indent=2)
                 export_hdf5(path_result_h5, result)
                 export_mat(path_result_mat, result)
+            
+            # broadcast metadata and data
+            if monitor_channel is not None:
+                monitor_channel.publish({
+                    "metadata": sweep_metadata,
+                    "data": np_dict_to_list_dict(result), # converts np ndarrays to regular lists
+                })
 
         if sweep_order == "row":
             for row in range(device_row, device_row + num_rows):
                 for col in range(device_col, device_col + num_cols):
                     run_inner(row, col, row_col_str=f"r{row}_c{col}")
+                    # check cancel signal and return if received
+                    if signal_cancel is not None and signal_cancel.is_cancelled():
+                        logging.info("Measurement cancelled by signal.")
+                        return
         elif sweep_order == "col":
             for col in range(device_col, device_col + num_cols):
                 for row in range(device_row, device_row + num_rows):
                     run_inner(row, col, row_col_str=f"c{col}_r{row}")
+                    # check cancel signal and return if received
+                    if signal_cancel is not None and signal_cancel.is_cancelled():
+                        logging.info("Measurement cancelled by signal.")
+                        return
         else:
             raise ValueError(f"Invalid sweep_order {sweep_order}, must be 'row' or 'col'")
         

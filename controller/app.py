@@ -42,10 +42,15 @@ def create_server(
     # users path
     path_users = os.path.join(path_settings, "users")
 
+    # event channels
+    channel_controller = sse.EventChannel()
+    channel_monitor = sse.EventChannel()
+
     # pyvisa controller backend
     controller = Controller(
         path_settings=path_controller_settings,
         path_users=path_users,
+        monitor_channel=channel_monitor,
     )
 
     # flask web server as controller api interface
@@ -54,33 +59,28 @@ def create_server(
     if cors:
         CORS(app)
 
-    # event channels
-    channel = sse.EventChannel()
-    channel_controller = sse.EventChannel()
-    channel_monitor = sse.EventChannel()
-
     # temp: for testing
     def long_repeating_task():
         i = 0
         while True:
             x = np.arange(16)
             y = np.sin(i + x)
-            channel.publish({
+            channel_monitor.publish({
                 "x": x.tolist(),
                 "y": y.tolist(),
             })
             i += 1
             gevent.sleep(0.1)
 
-    t = gevent.spawn(long_repeating_task)
+    # t = gevent.spawn(long_repeating_task)
 
     @app.route("/subscribe")
     def subscribe():
-        return channel.subscribe()
+        return channel_monitor.subscribe()
 
     @app.route("/publish", methods=["POST"])
     def publish():
-        channel.publish(request.data)
+        channel_monitor.publish(request.data)
         return "OK"
 
     @app.route("/")
