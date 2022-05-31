@@ -31,13 +31,16 @@ class SweepArray(MeasurementSweep):
         sweep_save_data,
         current_die_x,
         current_die_y,
-        device_x,
-        device_y,
+        device_dx,
+        device_dy,
         device_row,
         device_col,
         data_folder,
         program,
         program_config,
+        instr_b1500=None,
+        instr_cascade=None,
+        move_chuck=None, # callback to move chuck (x, y) relative to home (start position)
         monitor_channel=None,
         signal_cancel=None,
     ):
@@ -68,8 +71,8 @@ class SweepArray(MeasurementSweep):
                 die_y=current_die_y,
                 device_row=device_row,
                 device_col=device_col,
-                device_dx=device_x,
-                device_dy=device_y,
+                device_dx=device_dx,
+                device_dy=device_dy,
                 data_folder=data_folder,
                 save_dir=save_dir,
                 save_data=sweep_save_data,
@@ -79,21 +82,33 @@ class SweepArray(MeasurementSweep):
             )
 
         if sweep_order == "row":
-            for row in range(device_row, device_row + num_rows):
-                for col in range(device_col, device_col + num_cols):
+            for ny, row in enumerate(range(device_row, device_row + num_rows)):
+                for nx, col in enumerate(range(device_col, device_col + num_cols)):
                     run_inner(row, col, row_col_str=f"r{row}_c{col}")
                     # check cancel signal and return if received
                     if signal_cancel is not None and signal_cancel.is_cancelled():
                         logging.info("Measurement cancelled by signal.")
                         return
+                    # move chuck by 1 col
+                    if nx < (num_cols-1) and move_chuck is not None:
+                        move_chuck(x=(nx+1)*device_dx, y=ny*device_dy)
+                # move chuck back to col 0, move up by 1 row
+                if ny < (num_rows-1) and move_chuck is not None:
+                    move_chuck(x=0, y=(ny+1)*device_dy)
         elif sweep_order == "col":
-            for col in range(device_col, device_col + num_cols):
-                for row in range(device_row, device_row + num_rows):
+            for nx, col in enumerate(range(device_col, device_col + num_cols)):
+                for ny, row in enumerate(range(device_row, device_row + num_rows)):
                     run_inner(row, col, row_col_str=f"c{col}_r{row}")
                     # check cancel signal and return if received
                     if signal_cancel is not None and signal_cancel.is_cancelled():
                         logging.info("Measurement cancelled by signal.")
                         return
+                    # move chuck by 1 row
+                    if ny < (num_rows-1) and move_chuck is not None:
+                        move_chuck(x=nx*device_dx, y=(ny+1)*device_dy)
+                # move chuck back to row 0, move by 1 col
+                if nx < (num_cols-1) and move_chuck is not None:
+                    move_chuck(x=(nx+1)*device_dx, y=0)
         else:
             raise ValueError(f"Invalid sweep_order {sweep_order}, must be 'row' or 'col'")
         

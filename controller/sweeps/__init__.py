@@ -128,13 +128,16 @@ class MeasurementSweep(ABC):
         sweep_save_data,
         current_die_x,
         current_die_y,
-        device_x,
-        device_y,
+        device_dx,
+        device_dy,
         device_row,
         device_col,
         data_folder,
         program,
         program_config,
+        instr_b1500=None,
+        instr_cascade=None,
+        move_chuck=None, # callback to move chuck (x, y) relative to home (start position)
         monitor_channel=None,
         signal_cancel=None,
     ):

@@ -404,19 +404,71 @@ class Controller():
             self.instrument_cascade.close()
             self.instrument_cascade = None
     
+    def set_chuck_home(self):
+        """Set cascade autoprobe chuck home to current location.
+        This is used in measurements to probe arrays relative to
+        starting location.
+            SetChuckHome Mode Unit
+        Mode:
+            0 - use current position
+            V - use given value
+        Unit
+            Y - micron (default)
+            I - mils
+        """
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.write(f"SetChuckHome 0 Y")
+            self.instrument_cascade.read() # read required to flush response
+            self.instrument_cascade.query("*OPC?")
+
     def move_chuck_relative(self, dx, dy):
         """Moves cascade autoprobe chuck relative to current location
-        by (dx, dy).
+        by (dx, dy). Command format is
+            MoveChuck X Y PosRef Unit Velocity Compensation
+        X: dx
+        Y: dy
+        PosRef:
+            - H - home (default)
+            - Z - zero
+            - C - center
+            - R - current position
+        Unit:
+            - Y - Micron (default)
+            - I - Mils
+            - X - Index
+            - J - jog
+        Velocity: velocity in percent (100% default)
+        Compensation:
+            - D - default (kernel setup default compensation)
+            - T - technology, use prober, offset, and tech compensation
+            - O - offset, use prober and offset
+            - P - prober, use only prober
+            - N - none, no compensation
         """
         if self.instrument_cascade is not None:
             if self.settings.invert_direction:
                 dx_ = -dx
                 dy_ = -dy
-            else:   
+            else:
                 dx_ = dx
                 dy_ = dy
             
             self.instrument_cascade.write(f"MoveChuck {dx_} {dy_} R Y 100")
+            self.instrument_cascade.read() # read required to flush response
+            self.instrument_cascade.query("*OPC?")
+    
+    def move_chuck_relative_to_home(self, x, y):
+        """Moves wafer chuck relative to home position. See `move_chuck_relative`
+        for MoveChuck command documentation"""
+        if self.instrument_cascade is not None:
+            if self.settings.invert_direction:
+                x_ = -x
+                y_ = -y
+            else:
+                x_ = x
+                y_ = y
+            
+            self.instrument_cascade.write(f"MoveChuck {x_} {y_} H Y 100")
             self.instrument_cascade.read() # read required to flush response
             self.instrument_cascade.query("*OPC?")
         
@@ -425,8 +477,8 @@ class Controller():
         user: str,
         current_die_x: int,
         current_die_y: int,
-        device_x: float,
-        device_y: float,
+        device_dx: float,
+        device_dy: float,
         device_row: int,
         device_col: int,
         data_folder: str,
@@ -441,8 +493,8 @@ class Controller():
         print("user =", user)
         print("current_die_x =", current_die_x)
         print("current_die_y =", current_die_y)
-        print("device_x =", device_x)
-        print("device_y =", device_y)
+        print("device_dx =", device_dx)
+        print("device_dy =", device_dy)
         print("device_row =", device_row)
         print("device_col =", device_col)
         print("data_folder =", data_folder)
@@ -461,13 +513,21 @@ class Controller():
             logging.error(f"Data folder {data_folder} does not exist. Cancelling measurement sweep.")
             callback(False)
             return
-
+    
         # try acquire instrument task lock
         if self.task_lock.acquire(blocking=False, timeout=None):
             
             # reset cancel task signal
             self.signal_cancel_task.reset()
 
+            # set current chuck home position
+            if self.instrument_cascade is not None:
+                self.set_chuck_home()
+
+            # callback to move chuck
+            def callback_move_chuck(x, y):
+                self.move_chuck_relative_to_home(x, y)
+            
             def task():
                 status = False # measurement result status: TODO replace with something better
 
@@ -475,13 +535,16 @@ class Controller():
 
                 try:
                     sweep.run(
+                        instr_b1500=self.instrument_b1500,
+                        instr_cascade=self.instrument_cascade,
+                        move_chuck=callback_move_chuck,
                         user=user,
                         sweep_config=sweep_config,
                         sweep_save_data=sweep_save_data,
                         current_die_x=current_die_x,
                         current_die_y=current_die_y,
-                        device_x=device_x,
-                        device_y=device_y,
+                        device_dx=device_dx,
+                        device_dy=device_dy,
                         device_row=device_row,
                         device_col=device_col,
                         data_folder=data_folder,
@@ -556,27 +619,27 @@ class ControllerApiHandler(Resource):
     
     def run_measurement(
         self,
-        user,
-        current_die_x,
-        current_die_y,
-        device_x,
-        device_y,
-        device_row,
-        device_col,
-        data_folder,
-        program,
-        program_config,
-        sweep,
-        sweep_config,
-        sweep_save_data,
+        user: str,
+        current_die_x: int,
+        current_die_y: int,
+        device_dx: float,
+        device_dy: float,
+        device_row: int,
+        device_col: int,
+        data_folder: str,
+        program: str,
+        program_config: str,
+        sweep: str,
+        sweep_config: str,
+        sweep_save_data: bool,
     ):
         """Run measurement task."""
         print("BEGIN MEASUREMENT PARSING")
         print("user =", user)
         print("current_die_x =", current_die_x)
         print("current_die_y =", current_die_y)
-        print("device_x =", device_x)
-        print("device_y =", device_y)
+        print("device_dx =", device_dx, type(device_dx))
+        print("device_dy =", device_dy, type(device_dy))
         print("device_row =", device_row)
         print("device_col =", device_col)
         print("data_folder =", data_folder)
@@ -611,8 +674,8 @@ class ControllerApiHandler(Resource):
             user=user,
             current_die_x=current_die_x,
             current_die_y=current_die_y,
-            device_x=device_x,
-            device_y=device_y,
+            device_dx=device_dx,
+            device_dy=device_dy,
             device_row=device_row,
             device_col=device_col,
             data_folder=data_folder,
