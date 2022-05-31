@@ -7,6 +7,7 @@ import gevent
 import pyvisa
 import logging
 from controller.programs import MeasurementProgram
+from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks
 
 
 def query_error(
@@ -57,8 +58,12 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         probe_source=1,
         probe_drain=3,
         probe_sub=9,
-        v_gs=np.arange(-1.2, 1.201, 0.1),
-        v_ds=np.array([0.050, 1.2]),
+        v_gs={
+            "start": -1.2,
+            "stop": 1.2,
+            "step": 0.1
+        },
+        v_ds=[0.050, 1.2],
         v_sub=0.0,
         negate_id=False,
         sweep_direction="fr",
@@ -72,6 +77,11 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         print(f"v_gs = {v_gs}")
         print(f"negate_id = {negate_id}")
         print(f"sweep_direction = {sweep_direction}")
+
+        # convert v_ds and v_gs into a list of values depending
+        v_gs_range = into_sweep_range(v_gs)
+        v_ds_range = into_sweep_range(v_ds)
+
 
         # TODO: map sweep_direction to this list
         class SweepType(Enum):
@@ -188,7 +198,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # set measurement mode to multi-channel staircase sweep (MODE = 16) (4-151, pg 471):
         #   MM mode,ch0,ch1,ch2,...
         mm_mode = 16
-        instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_gate}");
+        instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_source},{probe_gate}");
         query_error(instr_b1500)
 
         # set probe current measurement mode (4-62, pg 382):
@@ -199,8 +209,8 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         CMM_MODE_FORCE = 3
         CMM_MODE_SYNC = 4
         cmm_mode = CMM_MODE_CURRENT
-        instr_b1500.write(f"CMM {probe_source},{cmm_mode}")
         instr_b1500.write(f"CMM {probe_drain},{cmm_mode}")
+        instr_b1500.write(f"CMM {probe_source},{cmm_mode}")
         instr_b1500.write(f"CMM {probe_gate},{cmm_mode}")
         query_error(instr_b1500)
 
@@ -285,7 +295,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # ===========================================================
         # PERFORM SWEEP FOR EACH VDS
         # ===========================================================
-        for v_ds_val in v_ds:
+        for v_ds_val in v_ds_range:
             print(f"==============================")
             print(f"Measuring step (Vds = {v_ds_val} V)...")
             print(f"------------------------------")
@@ -295,9 +305,9 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             instr_b1500.write(sweeps[0].b1500_wv_sweep_command(
                 ch=probe_gate,
                 range=wv_range_mode,
-                start=v_gs[0],
-                stop=v_gs[-1],
-                steps=len(v_gs),
+                start=v_gs_range[0],
+                stop=v_gs_range[-1],
+                steps=len(v_gs_range),
                 icomp=id_compliance,
                 pcomp=pow_compliance,
             ))
@@ -351,7 +361,17 @@ class ProgramKeysightIdVgs(MeasurementProgram):
 if __name__ == "__main__":
     """Tests running the program
     """
-    
+    res = "NCT+5.55189E+00,NCI+0.00005E-09,NAT+5.66104E+00,NAI+0.00000E-09,NHT+5.77022E+00,NHI+0.00010E-09,WHV-1.20000E+00,NCT+5.83624E+00,NCI+0.00000E-09,NAT+5.85902E+00,NAI+0.00000E-09,NHT+5.96819E+00,NHI+0.00015E-09,WHV-1.10000E+00,NCT+6.03426E+00,NCI+0.00000E-09,NAT+6.05703E+00,NAI+0.00010E-09,NHT+6.16623E+00,NHI+0.00000E-09,WHV-1.00000E+00,NCT+6.23234E+00,NCI+0.00000E-09,NAT+6.25518E+00,NAI+0.00000E-09,NHT+6.36435E+00,NHI+0.00010E-09,WHV-0.90000E+00,NCT+6.43042E+00,NCI+0.00005E-09,NAT+6.45328E+00,NAI+0.00005E-09,NHT+6.56246E+00,NHI+0.00005E-09,WHV-0.80000E+00,NCT+6.62855E+00,NCI+0.00015E-09,NAT+6.65140E+00,NAI+0.00005E-09,NHT+6.76060E+00,NHI+0.00010E-09,WHV-0.70000E+00,NCT+6.82667E+00,NCI+0.00000E-09,NAT+6.84944E+00,NAI+0.00000E-09,NHT+6.95864E+00,NHI+0.00015E-09,WHV-0.60000E+00,NCT+7.02471E+00,NCI+0.00010E-09,NAT+7.04756E+00,NAI+0.00005E-09,NHT+7.15675E+00,NHI+0.00010E-09,WHV-0.50000E+00,NCT+7.22284E+00,NCI+0.00005E-09,NAT+7.24569E+00,NAI-0.00010E-09,NHT+7.35487E+00,NHI+0.00000E-09,WHV-0.40000E+00,NCT+7.42094E+00,NCI+0.00010E-09,NAT+7.44379E+00,NAI+0.00015E-09,NHT+7.55299E+00,NHI+0.00010E-09,WHV-0.30000E+00,NCT+7.61906E+00,NCI+0.00005E-09,NAT+7.64190E+00,NAI+0.00010E-09,NHT+7.75107E+00,NHI+0.00015E-09,WHV-0.20000E+00,NCT+7.81712E+00,NCI+0.00000E-09,NAT+7.83997E+00,NAI+0.00010E-09,NHT+7.94907E+00,NHI+0.00005E-09,WHV-0.10000E+00,NCT+8.01521E+00,NCI+0.00000E-09,NAT+8.03806E+00,NAI+0.00010E-09,NHT+8.14722E+00,NHI+0.00015E-09,WHV+0.00000E+00,NCT+8.21331E+00,NCI+0.00000E-09,NAT+8.23608E+00,NAI-0.00005E-09,NHT+8.34523E+00,NHI+0.00000E-09,WHV+0.10000E+00,NCT+8.41130E+00,NCI+0.00000E-09,NAT+8.43407E+00,NAI+0.00010E-09,NHT+8.54324E+00,NHI+0.00015E-09,WHV+0.20000E+00,NCT+8.60933E+00,NCI+0.00000E-09,NAT+8.63209E+00,NAI+0.00015E-09,NHT+8.74126E+00,NHI+0.00015E-09,WHV+0.30000E+00,NCT+8.80730E+00,NCI+0.00000E-09,NAT+8.83016E+00,NAI+0.00005E-09,NHT+8.93933E+00,NHI+0.00010E-09,WHV+0.40000E+00,NCT+9.00542E+00,NCI+0.00010E-09,NAT+9.02826E+00,NAI+0.00000E-09,NHT+9.13741E+00,NHI+0.00015E-09,WHV+0.50000E+00,NCT+9.20348E+00,NCI+0.00000E-09,NAT+9.22632E+00,NAI+0.00010E-09,NHT+9.33545E+00,NHI+0.00005E-09,WHV+0.60000E+00,NCT+9.40154E+00,NCI+0.00000E-09,NAT+9.42431E+00,NAI+0.00000E-09,NHT+9.53348E+00,NHI+0.00010E-09,WHV+0.70000E+00,NCT+9.59954E+00,NCI-0.00005E-09,NAT+9.62241E+00,NAI+0.00010E-09,NHT+9.73154E+00,NHI+0.00000E-09,WHV+0.80000E+00,NCT+9.79756E+00,NCI+0.00010E-09,NAT+9.82043E+00,NAI+0.00005E-09,NHT+9.92957E+00,NHI+0.00015E-09,WHV+0.90000E+00,NCT+9.99564E+00,NCI+0.00010E-09,NAT+1.00184E+01,NAI+0.00015E-09,NHT+1.01276E+01,NHI+0.00000E-09,WHV+1.00000E+00,NCT+1.01936E+01,NCI+0.00005E-09,NAT+1.02165E+01,NAI+0.00015E-09,NHT+1.03256E+01,NHI+0.00015E-09,WHV+1.10000E+00,NCT+1.03917E+01,NCI+0.00000E-09,NAT+1.04145E+01,NAI+0.00005E-09,NHT+1.05236E+01,NHI+0.00005E-09,EHV+1.20000E+00"
+    print(res)
+    vals = res.strip().split(",")
+    vals = parse_keysight_str_values(vals)
+    print(vals)
+
+    for vals_chunk in iter_chunks(vals, 7):
+        print(vals_chunk)
+
+    exit()
+
     rm = pyvisa.ResourceManager()
     print(rm.list_resources())
 
