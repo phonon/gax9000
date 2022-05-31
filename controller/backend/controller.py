@@ -163,13 +163,15 @@ class ControllerSettings():
     """
     def __init__(
         self,
-        gpib_b1500: int,
-        gpib_cascade: int,
-        users: list,
+        gpib_b1500: int = 16,          # gpib id of b1500 instrument
+        gpib_cascade: int = 22,        # gpib id of cascade instrument
+        users: list = ["public"],      # list of username strings
+        invert_direction: bool = True, # invert chuck movement directions (if true, topleft is (+x,+y))
     ):
         self.gpib_b1500 = gpib_b1500
         self.gpib_cascade = gpib_cascade
         self.users = users
+        self.invert_direction = invert_direction
 
     def default():
         """Return a default settings object."""
@@ -177,6 +179,7 @@ class ControllerSettings():
             gpib_b1500=16,
             gpib_cascade=22,
             users=["public"],
+            invert_direction=True,
         )
 
 class SignalCancelTask():
@@ -380,7 +383,13 @@ class Controller():
 
     def disconnect_b1500(self):
         """Disconnect from b1500 instrument."""
-        pass
+        if self.instrument_b1500 is not None:
+            # check if task lock active (do not allow disconnecting
+            # in middle of measurement)
+            if self.task_lock.acquire(blocking=False, timeout=None):
+                self.instrument_b1500.close()
+                self.instrument_b1500 = None
+                self.task_lock.release()
 
     def connect_cascade(self, gpib: int):
         """Connect to cascade instrument resource through GPIB
@@ -391,15 +400,26 @@ class Controller():
 
     def disconnect_cascade(self):
         """Disconnect from cascade instrument."""
-        pass
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.close()
+            self.instrument_cascade = None
     
     def move_chuck_relative(self, dx, dy):
         """Moves cascade autoprobe chuck relative to current location
         by (dx, dy).
         """
         if self.instrument_cascade is not None:
-            self.instrument_cascade.write(f"MoveChuck {dx} {dy} R Y 100")
-
+            if self.settings.invert_direction:
+                dx_ = -dx
+                dy_ = -dy
+            else:   
+                dx_ = dx
+                dy_ = dy
+            
+            self.instrument_cascade.write(f"MoveChuck {dx_} {dy_} R Y 100")
+            self.instrument_cascade.read() # read required to flush response
+            self.instrument_cascade.query("*OPC?")
+        
     def run_measurement(
         self,
         user: str,
