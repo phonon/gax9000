@@ -97,7 +97,16 @@ const handleMoveChuckRelative = (axios, dxExpr, dyExpr) => {
     } else {
         console.error(`dx or dy is not a valid number: dx=${dx} (${typeof dx}), dy=${dy} (${typeof dy})`);
     }
+}
 
+/**
+ * Sends signal to move chuck to home position
+ */
+const handleMoveChuckHome = (axios) => {
+    axios.put("api/controller", {
+        msg: "move_chuck_home",
+        data: {},
+    });
 }
 
 /**
@@ -287,7 +296,15 @@ export const WaferControls = ({
                                 </Button>
                             </Grid>
 
-                            <Grid item xs={4}/>
+                            <Grid item xs={4}>
+                                <Button
+                                    variant="outlined"
+                                    color="primary"
+                                    onClick={() => handleMoveChuckHome(axios)}
+                                >
+                                    🏠
+                                </Button>
+                            </Grid>
 
                             <Grid item xs={4}>
                                 <Button 

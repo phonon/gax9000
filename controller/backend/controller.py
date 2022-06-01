@@ -239,6 +239,9 @@ class Controller():
         self.task_lock = BoundedSemaphore(value=1)
         # cancel task signal
         self.signal_cancel_task = SignalCancelTask()
+        # flag that a chuck home position has been set by any prior measurement
+        # this is required to ensure `move_chuck_home` is safe
+        self.chuck_home_position_set = False
     
     def load_settings(self):
         """Load controller settings from file."""
@@ -420,7 +423,10 @@ class Controller():
             self.instrument_cascade.write(f"SetChuckHome 0 Y")
             self.instrument_cascade.read() # read required to flush response
             self.instrument_cascade.query("*OPC?")
-
+            self.chuck_home_position_set = True
+        else:
+            logging.error("`set_chuck_home` failed: no Cascade connected.")
+    
     def move_chuck_relative(self, dx, dy):
         """Moves cascade autoprobe chuck relative to current location
         by (dx, dy). Command format is
@@ -456,10 +462,13 @@ class Controller():
             self.instrument_cascade.write(f"MoveChuck {dx_} {dy_} R Y 100")
             self.instrument_cascade.read() # read required to flush response
             self.instrument_cascade.query("*OPC?")
+        else:
+            logging.error("`move_chuck_relative` failed: no Cascade connected.")
     
     def move_chuck_relative_to_home(self, x, y):
         """Moves wafer chuck relative to home position. See `move_chuck_relative`
-        for MoveChuck command documentation"""
+        for MoveChuck command documentation.
+        """
         if self.instrument_cascade is not None:
             if self.settings.invert_direction:
                 x_ = -x
@@ -471,7 +480,21 @@ class Controller():
             self.instrument_cascade.write(f"MoveChuck {x_} {y_} H Y 100")
             self.instrument_cascade.read() # read required to flush response
             self.instrument_cascade.query("*OPC?")
-        
+        else:
+            logging.error("`move_chuck_relative_to_home` failed: no Cascade connected.")
+    
+    def move_chuck_home(self):
+        """Move chuck to previously set home position. See `move_chuck_relative`
+        for MoveChuck command documentation.
+        """
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.write(f"MoveChuck 0 0 H Y 100")
+            self.instrument_cascade.read() # read required to flush response
+            self.instrument_cascade.query("*OPC?")
+            self.chuck_home_position_set = True
+        else:
+            logging.error("`move_chuck_home` failed: no Cascade connected.")
+    
     def run_measurement(
         self,
         user: str,
@@ -615,6 +638,7 @@ class ControllerApiHandler(Resource):
             "get_measurement_sweep_config": self.get_measurement_sweep_config,
             "set_measurement_sweep_config": self.set_measurement_sweep_config,
             "move_chuck_relative": self.move_chuck_relative,
+            "move_chuck_home": self.move_chuck_home,
         }
     
     def run_measurement(
@@ -810,6 +834,10 @@ class ControllerApiHandler(Resource):
     def move_chuck_relative(self, dx, dy):
         """Move chuck relative to current position."""
         self.controller.move_chuck_relative(dx, dy)
+    
+    def move_chuck_home(self):
+        """Move chuck relative to current position."""
+        self.controller.move_chuck_home()
 
     def get(self):
         """Returns global controller config settings."""
