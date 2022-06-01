@@ -10,8 +10,13 @@ import {
     MenuItem,
     Select,
     TextField,
+    Tooltip,
 } from "@mui/material";
 import {isNumeric, isValidNumber} from "../../utils/utils.js";
+
+import IconChuckDown from "../../assets/icon_chuck_contacts_down.svg";
+import IconChuckUp from "../../assets/icon_chuck_contacts_up.svg";
+
 
 /**
  * Wrapper for setting a user profile setting in backend
@@ -105,6 +110,26 @@ const handleMoveChuckRelative = (axios, dxExpr, dyExpr) => {
 const handleMoveChuckHome = (axios) => {
     axios.put("api/controller", {
         msg: "move_chuck_home",
+        data: {},
+    });
+}
+
+/**
+ * Move contacts up.
+ */
+const handleContactsUp = (axios) => {
+    axios.put("api/controller", {
+        msg: "move_contacts_up",
+        data: {},
+    });
+}
+
+/**
+ * Move contacts up.
+ */
+const handleContactsDown = (axios) => {
+    axios.put("api/controller", {
+        msg: "move_contacts_down",
         data: {},
     });
 }
@@ -297,13 +322,15 @@ export const WaferControls = ({
                             </Grid>
 
                             <Grid item xs={4}>
-                                <Button
-                                    variant="outlined"
-                                    color="primary"
-                                    onClick={() => handleMoveChuckHome(axios)}
-                                >
-                                    🏠
-                                </Button>
+                                <Tooltip arrow enterDelay={1000} title="Move Chuck to Home">
+                                    <Button
+                                        variant="outlined"
+                                        color="primary"
+                                        onClick={() => handleMoveChuckHome(axios)}
+                                    >
+                                        🏠
+                                    </Button>
+                                </Tooltip>
                             </Grid>
 
                             <Grid item xs={4}>
@@ -364,7 +391,32 @@ export const WaferControls = ({
                                     error={!isNumeric(deviceCol)}
                                 />
                             </Grid>
-                            <Grid item xs={6}/>
+
+                            <Grid item xs={2}/>
+
+                            <Grid item xs={2}>
+                                <Tooltip arrow title="Move Contacts Up">
+                                    <IconButton
+                                        color="primary"
+                                        onClick={() => handleContactsUp(axios)}
+                                        sx={{padding: "4px 0px"}}
+                                    >
+                                        <img width={"100%"} height={"100%"} src={IconChuckUp}/>
+                                    </IconButton>
+                                </Tooltip>
+                            </Grid>
+
+                            <Grid item xs={2}>
+                                <Tooltip arrow title="Move Contacts Down">
+                                    <IconButton
+                                        color="primary"
+                                        onClick={() => handleContactsDown(axios)}
+                                        sx={{padding: "4px 0px"}}
+                                    >
+                                        <img width={"100%"} height={"100%"} src={IconChuckDown}/>
+                                    </IconButton>
+                                </Tooltip>
+                            </Grid>
 
                         </Grid>
                     </Box>

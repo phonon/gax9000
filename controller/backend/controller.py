@@ -495,6 +495,18 @@ class Controller():
         else:
             logging.error("`move_chuck_home` failed: no Cascade connected.")
     
+    def move_contacts_up(self):
+        """Move contacts up (internally moves chuck down).
+        """
+        # TODO
+        pass
+    
+    def move_contacts_down(self):
+        """Moves contacts down to touch device (internally moves chuck up).
+        """
+        # TODO
+        pass
+        
     def run_measurement(
         self,
         user: str,
@@ -639,6 +651,8 @@ class ControllerApiHandler(Resource):
             "set_measurement_sweep_config": self.set_measurement_sweep_config,
             "move_chuck_relative": self.move_chuck_relative,
             "move_chuck_home": self.move_chuck_home,
+            "move_contacts_up": self.move_contacts_up,
+            "move_contacts_down": self.move_contacts_down,
         }
     
     def run_measurement(
@@ -838,6 +852,14 @@ class ControllerApiHandler(Resource):
     def move_chuck_home(self):
         """Move chuck relative to current position."""
         self.controller.move_chuck_home()
+    
+    def move_contacts_up(self):
+        """Move contacts up."""
+        self.controller.move_contacts_up()
+    
+    def move_contacts_down(self):
+        """Move contacts down."""
+        self.controller.move_contacts_down()
 
     def get(self):
         """Returns global controller config settings."""

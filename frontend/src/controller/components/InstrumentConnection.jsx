@@ -6,6 +6,7 @@ import {
     MenuItem,
     Select,
     TextField,
+    Tooltip,
 } from "@mui/material";
 
 const handleBtnConnect = (axios, msg, address) => {
@@ -96,28 +97,32 @@ export const InstrumentConnection = ({
 
             {/* Button to connect to instrument GPIB */}
             <Grid item xs={1.5}>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="large"
-                    sx={{width: "100%", minWidth: "0px"}}
-                    onClick={() => handleBtnConnect(axios, apiConnectMsg, address)}
-                >
-                    🡱
-                </Button>
+                <Tooltip arrow title="Connect">
+                    <Button
+                        fullWidth
+                        variant="outlined"
+                        size="large"
+                        sx={{width: "100%", minWidth: "0px"}}
+                        onClick={() => handleBtnConnect(axios, apiConnectMsg, address)}
+                    >
+                        🡱
+                    </Button>
+                </Tooltip>
             </Grid>
 
             {/* Button to disconnect from instrument GPIB */}
             <Grid item xs={1.5}>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="large"
-                    sx={{width: "100%", minWidth: "0px"}}
-                    onClick={() => handleBtnDisconnect(axios, apiDisconnectMsg)}
-                >
-                    ✖
-                </Button>
+                <Tooltip arrow title="Disconnect">
+                    <Button
+                        fullWidth
+                        variant="outlined"
+                        size="large"
+                        sx={{width: "100%", minWidth: "0px"}}
+                        onClick={() => handleBtnDisconnect(axios, apiDisconnectMsg)}
+                    >
+                        ✖
+                    </Button>
+                </Tooltip>
             </Grid>
 
         </Grid>
