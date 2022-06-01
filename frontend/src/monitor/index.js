@@ -1,19 +1,35 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
-import Plot from "react-plotly.js";
+import { ProgramDebug, ProgramIdVds, ProgramIdVgs } from "./program.js";
+
 
 const Monitor = () => {
-    let [x, setX] = useState([0, 1, 2, 3])
-    let [y, setY] = useState([3, 2, 1, 0])
+    let [render, setRender] = useState((<>Waiting for result..</>))
+    
+    // route program name => render program jsx
+    const renderPrograms = new Map();
+    renderPrograms.set("debug", ProgramDebug);
+    renderPrograms.set("keysight_id_vds", ProgramIdVds);
+    renderPrograms.set("keysight_id_vgs", ProgramIdVgs);
 
     useEffect(() => {
         var eventSrc = new EventSource("https://localhost:9000/subscribe");
         eventSrc.onmessage = (e) => {
-            console.log(e.data);
             const data = JSON.parse(e.data);
             console.log(data);
-            setX(data.x);
-            setY(data.y);
+
+            // route program to
+            try {
+                console.log(data.metadata.program);
+                console.log(data);
+                const program = renderPrograms.get(data.metadata.program);
+                console.log("program:", program, ProgramDebug);
+                if ( program !== undefined ) {
+                    setRender(program({ metadata: data.metadata, data: data.data }));
+                }
+            } catch ( err ) {
+                console.error(err);
+            }
         };
 
         eventSrc.onerror = (e) => {
@@ -29,18 +45,7 @@ const Monitor = () => {
 
     return (
         <div>
-            <Plot
-                data={[
-                {
-                    x: x,
-                    y: y,
-                    type: "scatter",
-                    mode: "lines+markers",
-                    marker: {color: "red"},
-                },
-                ]}
-                layout={ {width: 600, height: 400, title: "A Fancy Plot"} }
-            />
+            {render}
         </div>
     )
 }
