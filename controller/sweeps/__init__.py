@@ -57,6 +57,7 @@ class MeasurementSweep(ABC):
     
     @staticmethod
     def run_single(
+        instr_b1500,
         user: str,
         sweep_name: str,
         sweep_config: dict,
@@ -77,7 +78,7 @@ class MeasurementSweep(ABC):
         inside a 2D array of devices. This method used internally by array sweep
         and single sweep. 
         """
-        result = program.run(**program_config)
+        result = program.run(instr_b1500=instr_b1500, **program_config)
         
         sweep_metadata = MeasurementSweep.metadata(
             user=user,

@@ -64,6 +64,7 @@ class SweepArray(MeasurementSweep):
             save_dir = f"gax_{row_col_str}_{program.name}_{t_measurement}"
 
             MeasurementSweep.run_single(
+                instr_b1500=instr_b1500,
                 user=user,
                 sweep_name=SweepArray.name,
                 sweep_config=sweep_config,

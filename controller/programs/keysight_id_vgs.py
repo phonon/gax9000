@@ -50,10 +50,13 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 "step": 0.1,
             },
             "v_ds": [-0.05, -1.2],
+            "v_sub": 0.0,
+            "negate_id": False,
+            "sweep_direction": "fr",
         }
 
     def run(
-        instr_b1500,
+        instr_b1500=None,
         probe_gate=8,
         probe_source=1,
         probe_drain=3,
@@ -71,13 +74,17 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
         print(f"probe_source = {probe_source}")
-        print(f"probe_gate = {probe_gate}")
+        print(f"probe_drain = {probe_drain}")
         print(f"probe_sub = {probe_sub}")
         print(f"v_ds = {v_ds}")
         print(f"v_gs = {v_gs}")
+        print(f"v_sub = {v_sub}")
         print(f"negate_id = {negate_id}")
         print(f"sweep_direction = {sweep_direction}")
-
+        
+        if instr_b1500 is None:
+            raise ValueError("Invalid instrument b1500 is None")
+        
         # convert v_ds and v_gs into a list of values depending
         v_gs_range = into_sweep_range(v_gs)
         v_ds_range = into_sweep_range(v_ds)
@@ -108,7 +115,8 @@ class ProgramKeysightIdVgs(MeasurementProgram):
 
         # reset instrument
         instr_b1500.write("*RST")
-        
+        instr_b1500.query("ERRX?") # clear any existing error message and ignore
+
         # enable channels: CN (pg 4-62)
         instr_b1500.write(f"CN {probe_sub},{probe_gate},{probe_drain},{probe_source}")
         query_error(instr_b1500)
@@ -316,7 +324,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 print(f"nbytes={nbytes}")
                 buf = instr_b1500.read()
                 # print(buf)
-                
+
                 # parse vals strings into numbers
                 vals = buf.strip().split(",")
                 vals = parse_keysight_str_values(vals)
@@ -357,6 +365,11 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
         # compliance values, and so on) and sets channels to 0 voltage.
         instr_b1500.write(f"DZ")
+
+        # post-process: negate id
+        if negate_id:
+            i_d_out = -i_d_out
+            i_s_out = -i_s_out
 
         return {
             "v_ds": v_ds_out,
@@ -409,7 +422,7 @@ if __name__ == "__main__":
                 instr_b1500=instr_b1500,
             )
             # print(result)
-            savemat("keysight_id_vgs.mat", result, appendmat=False)
+            savemat("debug/keysight_id_vgs.mat", result, appendmat=False)
         except Exception as err:
             print(f"Measurement FAILED: {err}")
             instr_b1500.write(f"DZ") # ensure channels are zero-d

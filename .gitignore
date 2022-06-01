@@ -15,3 +15,6 @@ settings
 
 # logging folder
 logs
+
+# debug result folder
+debug

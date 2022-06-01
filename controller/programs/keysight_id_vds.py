@@ -53,10 +53,13 @@ class ProgramKeysightIdVds(MeasurementProgram):
                 "stop": 2.0,
                 "step": 0.1,
             },
+            "v_sub": 0.0,
+            "negate_id": False,
+            "sweep_direction": "fr",
         }
     
     def run(
-        instr_b1500,
+        instr_b1500=None,
         probe_gate=8,
         probe_source=1,
         probe_drain=3,

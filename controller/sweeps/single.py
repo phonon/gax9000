@@ -45,6 +45,7 @@ class SweepSingle(MeasurementSweep):
         save_dir = f"gax_r{device_row}_c{device_col}_{program.name}_{t_measurement}"
 
         MeasurementSweep.run_single(
+            instr_b1500=instr_b1500,
             user=user,
             sweep_name=SweepSingle.name,
             sweep_config=sweep_config,
