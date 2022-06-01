@@ -2,6 +2,22 @@
  * Render debug data result.
  */
 
+import {
+    Accordion, AccordionSummary, AccordionDetails,
+    Box,
+    Button, 
+    Container,
+    Divider,
+    FormControl,
+    Grid,
+    IconButton,
+    InputLabel,
+    MenuItem,
+    Select,
+    Table, TableContainer, TableHead, TableRow, TableCell, TableBody,
+    TextField,
+    Typography,
+} from "@mui/material";
 import Plot from "react-plotly.js";
 import { colormap, colorTo255Range, colorBrighten } from "../util.js";
 
@@ -61,64 +77,102 @@ export const ProgramDebug = ({
     }
 
     return (
-        <div>
-            <div>
-                {metadataString}
-            </div>
+        <Box sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            height: "95vh",
+            width: "95vw",
+        }}>
+            <Box sx={{
+                flexGrow: 0,
+                flexShrink: 0,
+                width: "20%",
+                minWidth: "200px",
+                maxWidth: "400px",
+            }}>
+                {/* Key results table */}
+                
+                {/* Measurement Config */}
+                <Accordion>
+                    <AccordionSummary
+                        expandIcon={"⮟"}
+                    >
+                        <Typography variant="body1">Measurement Config</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                        <Typography component="div" variant="body1">
+                            <pre style={{overflow: "scroll"}}>
+                                {metadataString}
+                            </pre>
+                        </Typography>
+                    </AccordionDetails>
+                </Accordion>
+            </Box>
 
-            {/* Id-Vgs log */}
-            <Plot
-                data={tracesIdVgs}
-                layout={ {
-                    title: "Id-Vgs",
-                    width: 600,
-                    height: 600,
-                    xaxis: {
-                        type: "linear",
-                        autorange: true,
-                    },
-                    yaxis: {
-                        type: "log",
-                        autorange: true,
-                    }
-                } }
-            />
+            {/* PLOTS */}
+            <Box sx={{
+                flexGrow: 1,
+                minWidth: "400px",
+                maxWidth: "75%",
+                height: "100%",
+                overflow: "scroll",
+            }}>
+                {/* Id-Vgs log */}
+                <Plot
+                    data={tracesIdVgs}
+                    layout={ {
+                        title: "Id-Vgs",
+                        width: 600,
+                        height: 600,
+                        xaxis: {
+                            type: "linear",
+                            autorange: true,
+                        },
+                        yaxis: {
+                            type: "log",
+                            autorange: true,
+                        }
+                    } }
+                />
 
-            {/* Id-Vgs linear */}
-            <Plot
-                data={tracesIdVgs}
-                layout={ {
-                    title: "Id-Vgs",
-                    width: 600,
-                    height: 600,
-                    xaxis: {
-                        type: "linear",
-                        autorange: true,
-                    },
-                    yaxis: {
-                        type: "linear",
-                        autorange: true,
-                    }
-                } }
-            />
+                {/* Id-Vgs linear */}
+                <Plot
+                    data={tracesIdVgs}
+                    layout={ {
+                        title: "Id-Vgs",
+                        width: 600,
+                        height: 600,
+                        xaxis: {
+                            type: "linear",
+                            autorange: true,
+                        },
+                        yaxis: {
+                            type: "linear",
+                            autorange: true,
+                        }
+                    } }
+                />
 
-            {/* Ig-Vgs log */}
-            <Plot
-                data={tracesIgVgs}
-                layout={ {
-                    title: "Ig-Vgs",
-                    width: 600,
-                    height: 600,
-                    xaxis: {
-                        type: "linear",
-                        autorange: true,
-                    },
-                    yaxis: {
-                        type: "log",
-                        autorange: true,
-                    }
-                } }
-            />
-        </div>
+                {/* Ig-Vgs log */}
+                <Plot
+                    data={tracesIgVgs}
+                    layout={ {
+                        title: "Ig-Vgs",
+                        width: 600,
+                        height: 600,
+                        xaxis: {
+                            type: "linear",
+                            autorange: true,
+                        },
+                        yaxis: {
+                            type: "log",
+                            autorange: true,
+                        }
+                    } }
+                />
+            </Box>
+            
+        </Box>
     );
 }
