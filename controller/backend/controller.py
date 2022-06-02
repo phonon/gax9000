@@ -488,24 +488,36 @@ class Controller():
         for MoveChuck command documentation.
         """
         if self.instrument_cascade is not None:
-            self.instrument_cascade.write(f"MoveChuck 0 0 H Y 100")
-            self.instrument_cascade.read() # read required to flush response
-            self.instrument_cascade.query("*OPC?")
-            self.chuck_home_position_set = True
+            if self.chuck_home_position_set:
+                self.instrument_cascade.write(f"MoveChuck 0 0 H Y 100")
+                self.instrument_cascade.read() # read required to flush response
+                self.instrument_cascade.query("*OPC?")
+            else:
+                logging.error("`move_chuck_home` failed: no home set.")
         else:
             logging.error("`move_chuck_home` failed: no Cascade connected.")
     
     def move_contacts_up(self):
-        """Move contacts up (internally moves chuck down).
+        """Move contacts up (internally moves chuck down). Command is
+            `MoveChuckAlign Velocity` (velocity = 100% default)
         """
-        # TODO
-        pass
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.write(f"MoveChuckAlign 50")
+            self.instrument_cascade.read() # read required to flush response
+            self.instrument_cascade.query("*OPC?")
+        else:
+            logging.error("`move_contacts_up` failed: no Cascade connected.")
     
     def move_contacts_down(self):
         """Moves contacts down to touch device (internally moves chuck up).
+            `MoveChuckContact Velocity` (velocity = 100% default)
         """
-        # TODO
-        pass
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.write(f"MoveChuckContact 50")
+            self.instrument_cascade.read() # read required to flush response
+            self.instrument_cascade.query("*OPC?")
+        else:
+            logging.error("`move_contacts_down` failed: no Cascade connected.")
         
     def run_measurement(
         self,

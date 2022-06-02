@@ -114,7 +114,7 @@ export const ProgramIdVgs = ({
                 {/* Key results table */}
                 <Typography variant="h6">Metrics</Typography>
                 <TableContainer>
-                    <Table component="paper" size="small" aria-label="metrics table">
+                    <Table size="small" aria-label="metrics table">
                         <TableHead>
                             <TableRow>
                                 <TableCell>Vds</TableCell>
