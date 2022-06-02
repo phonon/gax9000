@@ -522,6 +522,7 @@ class Controller():
         sweep: MeasurementSweep,
         sweep_config: dict,
         sweep_save_data: bool,
+        sweep_save_image: bool,
         callback: Callable,
     ):
         print("RUNNING MEASUREMENT")
@@ -538,6 +539,7 @@ class Controller():
         print("sweep =", sweep)
         print("sweep_config =", sweep_config)
         print("sweep_save_data =", sweep_save_data)
+        print("sweep_save_image =", sweep_save_image)
         
         # save program and sweep config to disk
         self.set_measurement_program_config(user, program.name, program_config)
@@ -670,6 +672,7 @@ class ControllerApiHandler(Resource):
         sweep: str,
         sweep_config: str,
         sweep_save_data: bool,
+        sweep_save_image: bool,
     ):
         """Run measurement task."""
         print("BEGIN MEASUREMENT PARSING")
@@ -722,6 +725,7 @@ class ControllerApiHandler(Resource):
             sweep=instr_sweep,
             sweep_config=sweep_config_dict,
             sweep_save_data=sweep_save_data,
+            sweep_save_image=sweep_save_image,
             callback=self.signal_measurement_finished,
         )
     

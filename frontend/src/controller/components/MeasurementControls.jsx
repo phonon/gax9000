@@ -145,6 +145,8 @@ export const MeasurementControls = ({
     setSweepConfigLocal,
     sweepSaveData,
     setSweepSaveDataLocal,
+    sweepSaveImage,
+    setSweepSaveImageLocal,
     measurementRunning,
     handleRunMeasurement,
     handleCancelMeasurement,
@@ -302,8 +304,9 @@ export const MeasurementControls = ({
                                     }}
                                 />
                                 
-                                <FormGroup>
+                                <FormGroup sx={{flexDirection: "row"}}>
                                     <FormControlLabel control={<Checkbox checked={sweepSaveData} onChange={(e) => setSweepSaveDataLocal(e.target.checked)}/>} label="Save Data" />
+                                    <FormControlLabel control={<Checkbox checked={sweepSaveImage} onChange={(e) => setSweepSaveImageLocal(e.target.checked)}/>} label="Save Image" />
                                 </FormGroup>
                             </Box>
                         </Grid>

@@ -38,15 +38,15 @@ export const ProgramIdVds = ({
     const igMaxList = [];
 
     for ( let b = 0; b < numBias; b++ ) {
-        // base color based on vds bias
-        const colBase = colorTo255Range(colormap(b, 0, numBias-1));
+        // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
+        const colBase = colorTo255Range(colormap(b, -1, numBias));
         
         // add vgs bias
         vgsList.push(data.v_gs[b][0][0]);
 
         for ( let s = 0; s < numSweeps; s++ ) {
             // make additional sweeps brighter for visibility
-            const col = colorBrighten(colBase, 0.5 + (s * 0.5));
+            const col = colorBrighten(colBase, 0.6 + (s * 0.4));
 
             const vgs = data.v_gs[b][s][0];
             const vds = data.v_ds[b][s];

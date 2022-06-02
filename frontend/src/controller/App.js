@@ -71,6 +71,7 @@ function App({
     const [sweep, setSweep] = useState("");
     const [sweepConfig, setSweepConfig] = useState("{}");
     const [sweepSaveData, setSweepSaveData] = useState(true);
+    const [sweepSaveImage, setSweepSaveImage] = useState(true);
     
     // run dialog open
     const [runConfirmDialog, setRunConfirmDialog] = useState(false);
@@ -108,6 +109,7 @@ function App({
                 sweep: sweep,
                 sweep_config: sweepConfig,
                 sweep_save_data: sweepSaveData,
+                sweep_save_image: sweepSaveImage,
             },
         });
 
@@ -308,6 +310,8 @@ function App({
                         setSweepConfigLocal={setSweepConfig}
                         sweepSaveData={sweepSaveData}
                         setSweepSaveDataLocal={setSweepSaveData}
+                        sweepSaveImage={sweepSaveImage}
+                        setSweepSaveImageLocal={setSweepSaveImage}
                         measurementRunning={measurementRunning}
                         handleRunMeasurement={tryRunMeasurement}
                         handleCancelMeasurement={cancelMeasurement}
@@ -332,6 +336,7 @@ function App({
                 sweep={sweep}
                 sweepConfig={sweepConfig}
                 sweepSaveData={sweepSaveData}
+                sweepSaveImage={sweepSaveImage}
             />
         </Container>
     );

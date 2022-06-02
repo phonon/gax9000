@@ -33,6 +33,7 @@ export const DialogRunMeasurement = ({
     sweep,
     sweepConfig,
     sweepSaveData,
+    sweepSaveImage,
 }) => {
     function createRowData(name, value) {
         return { name, value };
@@ -47,6 +48,7 @@ export const DialogRunMeasurement = ({
         createRowData("Device Y", deviceY),
         createRowData("Data Folder", dataFolder),
         createRowData("Save Data", String(sweepSaveData)),
+        createRowData("Save Image", String(sweepSaveImage)),
     ];
 
     return (
