@@ -17,26 +17,71 @@ def query_error(
     if res[0:2] != "+0":
         raise RuntimeError(res)
 
-class ProgramKeysightIdVds(MeasurementProgram):
-    """Implement Id-Vds sweep with constant Vgs biases.
-    The Id-Vds measurement is a staircase sweep (pg 2-8).
-    The Vgs is stepped at a constant bias on each step,
-    while Vds is sweeped in a staircase:
-    
-       Vds
-        |          Measurement points
-        |            |   |   |   |
-        |            v   v   v   v
-        |WV                     ___
-        |                   ___/   \    
-        |   XE          ___/        \  
-        |____       ___/             \ 
-        |    \_____/                  \___
-        |_____________________________________ time
-    
-    """
+class RramSweepConfig():
+    """RRAM sweep bias configuration. Contain gate/drain/source"""
+    def __init__(
+        self,
+        v_g,
+        v_sweep,
+    ):
+        self.v_g = v_g,
+        self.v_sweep = v_sweep,
+        self.num_points = len(v_sweep)
 
-    name = "keysight_id_vds"
+class ProgramKeysightRram1T1R(MeasurementProgram):
+    """Implement 1T1R rram measurement.
+                     Vg
+                    __|__
+            Vd  ____|   |____xxxxxx____ Vs
+                     FET      RRAM
+    1T1R RRAM structure is a FET and RRAM in series. The FET serves
+    two purposes:
+        1.  Enforces a compliance current for setting the RRAM to
+            allow a more stable voltage-controlled resistance set.
+        2.  Limits current for unselected cells in RRAM array.
+    The structure requires a three terminal measurement:
+        - Vg: transistor gate voltage sets max fet current
+        - Vd: drain voltage bias
+        - Vs: source voltage bias
+    The measurement has three sweep parts: form, set, reset
+
+            Vform
+             ___        Vset             Vset
+            |   |        ___             ___             
+            |   |       |   |           |   |            
+    ________|   |_______|   |___     ___|   |___     ___ ...
+                                |   |           |   |   
+                                |___|           |___|   
+                                Vreset          Vreset
+    
+    This measurement allows running sequences of form/reset/set/reset/...
+    sweeps. The sweep sequence input is a string of characters:
+        "fsrsrsr..."
+    - "f": form sweep (forward/rev staircase to Vform)
+    - "s": set sweep (forward/rev staircase to Vset)
+    - "r": reset sweep (forward/rev staircase to Vreset)
+
+    Aim for ~100 uA current into the RRAM cell to form.
+    Top vs bottom FET RRAM config. Example configuration and sweeps
+    shown below (for FORMING/SET sweep positive voltage on top,
+    RESET use negative voltage on top):
+
+                   VS = [0, 1] V            TE = [0, 1] V
+                    _                        _
+                    |                        |
+                |---+                        X
+         Vg ---o|      (PMOS)                X  RRAM
+        = -1 V  |---+                        X  (TE)
+                    |                        |
+                    |                        |
+                    X                        +---|
+                    X   RRAM         (NMOS)      |---- Vg
+                    X   (BE)                 +---|    = 1 V
+                    |                        |
+                    v                        v
+                 BE = 0 V                 VS = 0 V
+    """
+    name = "keysight_rram_1t1r"
 
     def default_config():
         """Return default `run` arguments config as a dict."""
@@ -45,70 +90,82 @@ class ProgramKeysightIdVds(MeasurementProgram):
             "probe_source": 1,
             "probe_drain": 3,
             "probe_sub": 9,
-            "v_gs": {
-                "start": -1.2,
-                "stop": 1.2,
-                "step": 0.1,
-            },
-            "v_ds": {
-                "start": 0.0,
-                "stop": 2.0,
-                "step": 0.1,
-            },
+            "v_form": 3.0,
+            "v_set": 2.0,
+            "v_reset": -2.0,
             "v_sub": 0.0,
-            "negate_id": False,
-            "sweep_direction": "fr",
+            "v_g_form": -2.0,
+            "v_g_set": -2.0,
+            "v_g_reset": -2.0,
+            "v_step": 0.1,
+            "i_compliance_form": 10e-6,
+            "i_compliance_set": 10e-6,
+            "i_compliance_reset": 1e-3,
+            "sequence": "fsr",
         }
-    
+
     def run(
         instr_b1500=None,
         probe_gate=8,
         probe_source=1,
         probe_drain=3,
         probe_sub=9,
-        v_gs={
-            "start": -1.2,
-            "stop": 1.2,
-            "step": 0.1,
-        },
-        v_ds={
-            "start": 0.0,
-            "stop": 2.0,
-            "step": 0.1,
-        },
+        v_form=3.0,
+        v_set=2.0,
+        v_reset=-2.0,
         v_sub=0.0,
-        negate_id=False,
-        sweep_direction="fr",
+        v_g_form=2.0,
+        v_g_set=2.0,
+        v_g_reset=2.0,
+        v_step=0.1,
+        i_compliance_form=10e-6,
+        i_compliance_set=10e-6,
+        i_compliance_reset=1e-3,
+        sequence="fsr",
     ) -> dict:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
         print(f"probe_source = {probe_source}")
         print(f"probe_drain = {probe_drain}")
         print(f"probe_sub = {probe_sub}")
-        print(f"v_ds = {v_ds}")
-        print(f"v_gs = {v_gs}")
+        print(f"v_form = {v_form}")
+        print(f"v_set = {v_set}")
+        print(f"v_reset = {v_reset}")
         print(f"v_sub = {v_sub}")
-        print(f"negate_id = {negate_id}")
-        print(f"sweep_direction = {sweep_direction}")
+        print(f"v_g_form = {v_g_form}")
+        print(f"v_g_set = {v_g_set}")
+        print(f"v_g_reset = {v_g_reset}")
+        print(f"i_compliance_form = {i_compliance_form}")
+        print(f"i_compliance_set = {i_compliance_set}")
+        print(f"i_compliance_reset = {i_compliance_reset}")
+        print(f"sequence = {sequence}")
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
-        
-        # convert v_ds and v_gs into a list of values depending on variable object type
-        v_gs_range = into_sweep_range(v_gs)
-        v_ds_range = into_sweep_range(v_ds)
 
-        # maps string of sweep directions like "frf" => list of [SweepType.FORWARD_REVERSE, SweepType.FORWARD]
-        sweeps = SweepType.parse_string(sweep_direction)
+        # convert v_ds and v_gs into a list of values depending on variable object type
+        v_form_range = into_sweep_range({"start": 0, "stop": v_form, "step": v_step})
+        v_set_range = into_sweep_range({"start": 0, "stop": v_set, "step": v_step})
+        v_reset_range = into_sweep_range({"start": 0, "stop": v_reset, "step": v_step})
+
+        # parse sequence into bias configs
+        bias_configs = []
+        for i in range(len(sequence)):
+            pattern = sequence[i]
+            if pattern == "f": # form
+                bias_configs.append(RramSweepConfig(v_g=v_g_form, v_sweep=v_form_range))
+            elif pattern == "s": # set
+                bias_configs.append(RramSweepConfig(v_g=v_g_set, v_sweep=v_set_range))
+            elif pattern == "r": # reset
+                bias_configs.append(RramSweepConfig(v_g=v_g_reset, v_sweep=v_reset_range))
+            else:
+                raise ValueError(f"Invalid sweep pattern: {pattern}")
         
         # prepare output data matrices
-        num_bias = len(v_ds_range)
-        num_sweeps = SweepType.count_total_num_sweeps(sweeps)
-        num_points = len(v_gs_range)
-        data_shape = (num_bias, num_sweeps, num_points)
+        data_dict = {}
 
-        v_ds_out = np.full(data_shape, np.nan)
-        v_gs_out = np.full(data_shape, np.nan)
+        v_d_out = np.full(data_shape, np.nan)
+        v_g_out = np.full(data_shape, np.nan)
         i_d_out = np.full(data_shape, np.nan)
         i_s_out = np.full(data_shape, np.nan)
         i_g_out = np.full(data_shape, np.nan)
@@ -285,27 +342,27 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # ===========================================================
         # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
         # ===========================================================
-        for idx_bias, v_gs_val in enumerate(v_gs_range):
+        for idx_bias, v_ds_val in enumerate(v_ds_range):
             for idx_dir, sweep_type in SweepType.iter_with_sweep_index(sweeps):
                 print(f"==============================")
-                print(f"Measuring step {idx_bias}/{len(v_gs_range)} (Vgs = {v_gs_val} V)...")
+                print(f"Measuring step (Vds = {v_ds_val} V)...")
                 print(f"------------------------------")
                 
                 # write voltage staircase waveform
                 wv_range_mode = 0 # AUTO
                 instr_b1500.write(sweep_type.b1500_wv_sweep_command(
-                    ch=probe_drain,
+                    ch=probe_gate,
                     range=wv_range_mode,
-                    start=v_ds_range[0],
-                    stop=v_ds_range[-1],
-                    steps=len(v_ds_range),
+                    start=v_gs_range[0],
+                    stop=v_gs_range[-1],
+                    steps=len(v_gs_range),
                     icomp=id_compliance,
                     pcomp=pow_compliance,
                 ))
                 query_error(instr_b1500)
                 
-                # write gate bias
-                instr_b1500.write(f"DV {probe_gate},0,{v_gs_val},{ig_compliance}")
+                # write drain bias
+                instr_b1500.write(f"DV {probe_drain},0,{v_ds_val},{id_compliance}")
                 query_error(instr_b1500)
                 
                 # write bulk bias
@@ -352,10 +409,10 @@ class ProgramKeysightIdVds(MeasurementProgram):
 
                 for s, sweep_vals in enumerate(sweep_chunks):
                     for i, vals_chunk in enumerate(sweep_vals):
-                        val_table.append([v_gs_val, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
+                        val_table.append([v_ds_val, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
                         
-                        v_ds_out[idx_bias, idx_dir + s, i] = vals_chunk[6]
-                        v_gs_out[idx_bias, idx_dir + s, i] = v_gs_val
+                        v_ds_out[idx_bias, idx_dir + s, i] = v_ds_val
+                        v_gs_out[idx_bias, idx_dir + s, i] = vals_chunk[6]
                         i_d_out[idx_bias, idx_dir + s, i] = vals_chunk[1]
                         i_s_out[idx_bias, idx_dir + s, i] = vals_chunk[3]
                         i_g_out[idx_bias, idx_dir + s, i] = vals_chunk[5]
@@ -364,10 +421,10 @@ class ProgramKeysightIdVds(MeasurementProgram):
                         time_i_s_out[idx_bias, idx_dir + s, i] = vals_chunk[2]
                         time_i_g_out[idx_bias, idx_dir + s, i] = vals_chunk[4]
                 
-                print(tabulate(val_table, headers=["v_gs [V]", "v_ds [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
+                print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
 
                 print("------------------------------")
-                print(f"Finished step (Vgs = {v_gs_val} V")
+                print(f"Measuring step (Vds = {v_ds_val} V")
                 print("==============================")
 
         # zero voltages: DZ (pg 4-79)
@@ -375,27 +432,28 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # compliance values, and so on) and sets channels to 0 voltage.
         instr_b1500.write(f"DZ")
 
-        # post-process: negate id
-        if negate_id:
-            i_d_out = -i_d_out
-            i_s_out = -i_s_out
-
-        return {
-            "v_ds": v_ds_out,
-            "v_gs": v_gs_out,
-            "i_d": i_d_out,
-            "i_s": i_s_out,
-            "i_g": i_g_out,
-            "time_i_d": time_i_d_out,
-            "time_i_s": time_i_s_out,
-            "time_i_g": time_i_g_out,
-        }
+        return data_dict
 
 
 if __name__ == "__main__":
     """Tests running the program
     """
+    from scipy.io import savemat
+    # res = "NCT+5.55189E+00,NCI+0.00005E-09,NAT+5.66104E+00,NAI+0.00000E-09,NHT+5.77022E+00,NHI+0.00010E-09,WHV-1.20000E+00,NCT+5.83624E+00,NCI+0.00000E-09,NAT+5.85902E+00,NAI+0.00000E-09,NHT+5.96819E+00,NHI+0.00015E-09,WHV-1.10000E+00,NCT+6.03426E+00,NCI+0.00000E-09,NAT+6.05703E+00,NAI+0.00010E-09,NHT+6.16623E+00,NHI+0.00000E-09,WHV-1.00000E+00,NCT+6.23234E+00,NCI+0.00000E-09,NAT+6.25518E+00,NAI+0.00000E-09,NHT+6.36435E+00,NHI+0.00010E-09,WHV-0.90000E+00,NCT+6.43042E+00,NCI+0.00005E-09,NAT+6.45328E+00,NAI+0.00005E-09,NHT+6.56246E+00,NHI+0.00005E-09,WHV-0.80000E+00,NCT+6.62855E+00,NCI+0.00015E-09,NAT+6.65140E+00,NAI+0.00005E-09,NHT+6.76060E+00,NHI+0.00010E-09,WHV-0.70000E+00,NCT+6.82667E+00,NCI+0.00000E-09,NAT+6.84944E+00,NAI+0.00000E-09,NHT+6.95864E+00,NHI+0.00015E-09,WHV-0.60000E+00,NCT+7.02471E+00,NCI+0.00010E-09,NAT+7.04756E+00,NAI+0.00005E-09,NHT+7.15675E+00,NHI+0.00010E-09,WHV-0.50000E+00,NCT+7.22284E+00,NCI+0.00005E-09,NAT+7.24569E+00,NAI-0.00010E-09,NHT+7.35487E+00,NHI+0.00000E-09,WHV-0.40000E+00,NCT+7.42094E+00,NCI+0.00010E-09,NAT+7.44379E+00,NAI+0.00015E-09,NHT+7.55299E+00,NHI+0.00010E-09,WHV-0.30000E+00,NCT+7.61906E+00,NCI+0.00005E-09,NAT+7.64190E+00,NAI+0.00010E-09,NHT+7.75107E+00,NHI+0.00015E-09,WHV-0.20000E+00,NCT+7.81712E+00,NCI+0.00000E-09,NAT+7.83997E+00,NAI+0.00010E-09,NHT+7.94907E+00,NHI+0.00005E-09,WHV-0.10000E+00,NCT+8.01521E+00,NCI+0.00000E-09,NAT+8.03806E+00,NAI+0.00010E-09,NHT+8.14722E+00,NHI+0.00015E-09,WHV+0.00000E+00,NCT+8.21331E+00,NCI+0.00000E-09,NAT+8.23608E+00,NAI-0.00005E-09,NHT+8.34523E+00,NHI+0.00000E-09,WHV+0.10000E+00,NCT+8.41130E+00,NCI+0.00000E-09,NAT+8.43407E+00,NAI+0.00010E-09,NHT+8.54324E+00,NHI+0.00015E-09,WHV+0.20000E+00,NCT+8.60933E+00,NCI+0.00000E-09,NAT+8.63209E+00,NAI+0.00015E-09,NHT+8.74126E+00,NHI+0.00015E-09,WHV+0.30000E+00,NCT+8.80730E+00,NCI+0.00000E-09,NAT+8.83016E+00,NAI+0.00005E-09,NHT+8.93933E+00,NHI+0.00010E-09,WHV+0.40000E+00,NCT+9.00542E+00,NCI+0.00010E-09,NAT+9.02826E+00,NAI+0.00000E-09,NHT+9.13741E+00,NHI+0.00015E-09,WHV+0.50000E+00,NCT+9.20348E+00,NCI+0.00000E-09,NAT+9.22632E+00,NAI+0.00010E-09,NHT+9.33545E+00,NHI+0.00005E-09,WHV+0.60000E+00,NCT+9.40154E+00,NCI+0.00000E-09,NAT+9.42431E+00,NAI+0.00000E-09,NHT+9.53348E+00,NHI+0.00010E-09,WHV+0.70000E+00,NCT+9.59954E+00,NCI-0.00005E-09,NAT+9.62241E+00,NAI+0.00010E-09,NHT+9.73154E+00,NHI+0.00000E-09,WHV+0.80000E+00,NCT+9.79756E+00,NCI+0.00010E-09,NAT+9.82043E+00,NAI+0.00005E-09,NHT+9.92957E+00,NHI+0.00015E-09,WHV+0.90000E+00,NCT+9.99564E+00,NCI+0.00010E-09,NAT+1.00184E+01,NAI+0.00015E-09,NHT+1.01276E+01,NHI+0.00000E-09,WHV+1.00000E+00,NCT+1.01936E+01,NCI+0.00005E-09,NAT+1.02165E+01,NAI+0.00015E-09,NHT+1.03256E+01,NHI+0.00015E-09,WHV+1.10000E+00,NCT+1.03917E+01,NCI+0.00000E-09,NAT+1.04145E+01,NAI+0.00005E-09,NHT+1.05236E+01,NHI+0.00005E-09,EHV+1.20000E+00"
+    # print(res)
+    # vals = res.strip().split(",")
+    # vals = parse_keysight_str_values(vals)
+    # print(vals)
+
+    # val_table = []
+    # for vals_chunk in iter_chunks(vals, 7):
+    #     print(vals_chunk)
+    #     val_table.append(["0.05", vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
     
+    # print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
+
+    # exit()
+
     rm = pyvisa.ResourceManager()
     print(rm.list_resources())
 
@@ -411,9 +469,11 @@ if __name__ == "__main__":
     def run_measurement():
         print("RUNNING TASK")
         try:
-            ProgramKeysightIdVds.run(
+            result = ProgramKeysightRram1T1R.run(
                 instr_b1500=instr_b1500,
             )
+            # print(result)
+            savemat("debug/keysight_rram_1t1r.mat", result, appendmat=False)
         except Exception as err:
             print(f"Measurement FAILED: {err}")
             instr_b1500.write(f"DZ") # ensure channels are zero-d
@@ -427,4 +487,3 @@ if __name__ == "__main__":
     print("MEASUREMENT DONE, TURNING OFF SMUs WITH CL")
     instr_b1500.write("CL")
     query_error(instr_b1500)
-

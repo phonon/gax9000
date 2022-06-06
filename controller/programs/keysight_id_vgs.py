@@ -85,7 +85,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
         
-        # convert v_ds and v_gs into a list of values depending
+        # convert v_ds and v_gs into a list of values depending on variable object type
         v_gs_range = into_sweep_range(v_gs)
         v_ds_range = into_sweep_range(v_ds)
 
@@ -358,7 +358,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
 
                 print("------------------------------")
-                print(f"Measuring step (Vds = {v_ds_val} V")
+                print(f"Finished step (Vds = {v_ds_val} V")
                 print("==============================")
 
         # zero voltages: DZ (pg 4-79)
