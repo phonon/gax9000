@@ -108,9 +108,9 @@ export const ProgramIdVds = ({
                     <Table size="small" aria-label="metrics table">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Vds</TableCell>
-                                {vdsList.map((vds, i) =>
-                                    <TableCell key={i}>{vds}</TableCell>
+                                <TableCell>Vgs</TableCell>
+                                {vgsList.map((vgs, i) =>
+                                    <TableCell key={i}>{vgs}</TableCell>
                                 )}
                             </TableRow>
                         </TableHead>

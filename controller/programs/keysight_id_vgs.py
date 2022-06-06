@@ -111,7 +111,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # measurement compliance settings
         id_compliance = 0.100 # 100 mA complience
         ig_compliance = 0.010 # 10 mA complience
-        pow_compliance = abs(id_compliance * np.max(v_ds)) # power compliance [W]
+        pow_compliance = abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
 
         # reset instrument
         instr_b1500.write("*RST")

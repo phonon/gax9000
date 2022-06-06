@@ -48,7 +48,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
             "v_gs": {
                 "start": -1.2,
                 "stop": 1.2,
-                "step": 0.1,
+                "step": 0.2,
             },
             "v_ds": {
                 "start": 0.0,
@@ -67,9 +67,9 @@ class ProgramKeysightIdVds(MeasurementProgram):
         probe_drain=3,
         probe_sub=9,
         v_gs={
-            "start": -1.2,
+            "start": 0.0,
             "stop": 1.2,
-            "step": 0.1,
+            "step": 0.4,
         },
         v_ds={
             "start": 0.0,
@@ -102,9 +102,9 @@ class ProgramKeysightIdVds(MeasurementProgram):
         sweeps = SweepType.parse_string(sweep_direction)
         
         # prepare output data matrices
-        num_bias = len(v_ds_range)
+        num_bias = len(v_gs_range)
         num_sweeps = SweepType.count_total_num_sweeps(sweeps)
-        num_points = len(v_gs_range)
+        num_points = len(v_ds_range)
         data_shape = (num_bias, num_sweeps, num_points)
 
         v_ds_out = np.full(data_shape, np.nan)
@@ -120,7 +120,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # measurement compliance settings
         id_compliance = 0.100 # 100 mA complience
         ig_compliance = 0.010 # 10 mA complience
-        pow_compliance = abs(id_compliance * np.max(v_ds)) # power compliance [W]
+        pow_compliance = abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
 
         # reset instrument
         instr_b1500.write("*RST")
@@ -332,7 +332,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
                 nbytes = int(instr_b1500.query("NUB?"))
                 print(f"nbytes={nbytes}")
                 buf = instr_b1500.read()
-                # print(buf)
+                print(buf)
 
                 # parse vals strings into numbers
                 vals = buf.strip().split(",")
@@ -341,6 +341,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
                 # values chunked for each measurement point:
                 #   [ [vgs0, id0, ig0] , [vgs1, id1, ig1], ... ]
                 val_chunks = [ x for x in iter_chunks(vals, 7) ]
+                print(val_chunks)
 
                 # split val chunks into forward/reverse sweep components:
                 if sweep_type == SweepType.FORWARD or sweep_type == SweepType.REVERSE:

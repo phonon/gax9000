@@ -25,7 +25,7 @@ const Monitor = () => {
                 const program = renderPrograms.get(data.metadata.program);
                 console.log("program:", program, ProgramDebug);
                 if ( program !== undefined ) {
-                    setRender(program({ metadata: data.metadata, data: data.data }));
+                    setRender(program({ metadata: data.metadata.config, data: data.data }));
                 }
             } catch ( err ) {
                 console.error(err);

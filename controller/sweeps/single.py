@@ -1,5 +1,6 @@
 import os
 import json
+import gevent
 from controller.sweeps import MeasurementSweep
 from controller.util import timestamp, np_dict_to_list_dict
 from controller.util.io import export_hdf5, export_mat
@@ -72,3 +73,7 @@ class SweepSingle(MeasurementSweep):
                 program_config=pr_config,
                 monitor_channel=monitor_channel,
             )
+
+            # yields thread for other tasks (so data gets pushed)
+            # TODO: proper multithreaded task
+            gevent.sleep(0.2)

@@ -131,7 +131,10 @@ class MeasurementSweep(ABC):
         # broadcast metadata and data
         if monitor_channel is not None:
             monitor_channel.publish({
-                "metadata": sweep_metadata,
+                "metadata": {
+                    "program": program.name,
+                    "config": sweep_metadata,
+                },
                 "data": np_dict_to_list_dict(result), # converts np ndarrays to regular lists
             })
 

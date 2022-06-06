@@ -92,6 +92,10 @@ class SweepArray(MeasurementSweep):
                     monitor_channel=monitor_channel,
                 )
 
+                # yields thread for other tasks (so data gets pushed)
+                # TODO: proper multithreaded task
+                gevent.sleep(0.2)
+            
             # yields thread for other tasks
             # TODO: proper multithreaded task
             gevent.sleep(0.2)
