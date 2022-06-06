@@ -529,8 +529,8 @@ class Controller():
         device_row: int,
         device_col: int,
         data_folder: str,
-        program: MeasurementProgram,
-        program_config: dict,
+        programs: list[MeasurementProgram],
+        program_configs: list[dict],
         sweep: MeasurementSweep,
         sweep_config: dict,
         sweep_save_data: bool,
@@ -546,16 +546,20 @@ class Controller():
         print("device_row =", device_row)
         print("device_col =", device_col)
         print("data_folder =", data_folder)
-        print("program =", program)
-        print("program_config =", program_config)
+        print("programs =", programs)
+        print("program_configs =", program_configs)
         print("sweep =", sweep)
         print("sweep_config =", sweep_config)
         print("sweep_save_data =", sweep_save_data)
         print("sweep_save_image =", sweep_save_image)
         
-        # save program and sweep config to disk
-        self.set_measurement_program_config(user, program.name, program_config)
+        if len(programs) != len(program_configs):
+            raise ValueError(f"`programs` (len={len(programs)}) and `program_configs` (len={len(program_configs)}) must be same length")
+        
+        # save sweep config and program configs to disk to cache
         self.set_measurement_sweep_config(user, sweep.name, sweep_config)
+        for pr, pr_config in zip(programs, program_configs):
+            self.set_measurement_program_config(user, pr.name, pr_config)
 
         # verify data folder exists
         if sweep_save_data and not os.path.exists(data_folder):
@@ -597,8 +601,8 @@ class Controller():
                         device_row=device_row,
                         device_col=device_col,
                         data_folder=data_folder,
-                        program=program,
-                        program_config=program_config,
+                        programs=programs,
+                        program_configs=program_configs,
                         monitor_channel=self.monitor_channel,
                         signal_cancel=self.signal_cancel_task,
                     )
@@ -679,8 +683,8 @@ class ControllerApiHandler(Resource):
         device_row: int,
         device_col: int,
         data_folder: str,
-        program: str,
-        program_config: str,
+        programs: list[str],
+        program_configs: list[str],
         sweep: str,
         sweep_config: str,
         sweep_save_data: bool,
@@ -696,26 +700,36 @@ class ControllerApiHandler(Resource):
         print("device_row =", device_row)
         print("device_col =", device_col)
         print("data_folder =", data_folder)
-        print("program =", program)
-        print("program_config =", program_config)
+        print("programs =", programs)
+        print("program_configs =", program_configs)
         print("sweep =", sweep)
         print("sweep_config =", sweep_config)
         print("sweep_save_data =", sweep_save_data)
 
-        # get program and sweep
-        instr_program = MeasurementProgram.get(program)
-        instr_sweep = MeasurementSweep.get(sweep)
-        if instr_program is None or instr_sweep is None:
-            logging.error("Invalid program or sweep")
-            return self.signal_measurement_failed("Invalid program or sweep")
+        # get programs
+        instr_programs = []
+        for pr in programs:
+            instr_program = MeasurementProgram.get(pr)
+            if instr_program is None:
+                logging.error(f"Invalid program: {pr}")
+                return self.signal_measurement_failed(f"Invalid program: {pr}")
+            instr_programs.append(instr_program)
         
         # parse program config and sweep config
-        try:
-            program_config_dict = json.loads(program_config)
-        except Exception as err:
-            logging.error(f"Invalid program config: {err}")
-            return self.signal_measurement_failed("Invalid program config")
+        instr_program_configs = []
+        for pr_config in program_configs:
+            try:
+                program_config_dict = json.loads(pr_config)
+            except Exception as err:
+                logging.error(f"Invalid program config: {err}")
+                return self.signal_measurement_failed("Invalid program config")
+            instr_program_configs.append(program_config_dict)
         
+        # get sweep
+        instr_sweep = MeasurementSweep.get(sweep)
+        if instr_sweep is None:
+            logging.error(f"Invalid sweep type: {sweep}")
+            return self.signal_measurement_failed(f"Invalid sweep: {sweep}")
         try:
             sweep_config_dict = json.loads(sweep_config)
         except Exception as err:
@@ -732,8 +746,8 @@ class ControllerApiHandler(Resource):
             device_row=device_row,
             device_col=device_col,
             data_folder=data_folder,
-            program=instr_program,
-            program_config=program_config_dict,
+            programs=instr_programs,
+            program_configs=instr_program_configs,
             sweep=instr_sweep,
             sweep_config=sweep_config_dict,
             sweep_save_data=sweep_save_data,
@@ -831,13 +845,14 @@ class ControllerApiHandler(Resource):
         """Update a user setting to new value."""
         self.controller.set_user_setting(user, setting, value)
     
-    def get_measurement_program_config(self, user, program):
+    def get_measurement_program_config(self, user, program, index):
         """Get measurement program config for user and program."""
         config = self.controller.get_measurement_program_config(user, program)
         if config is not None:
             self.channel.publish({
                 "msg": "measurement_program_config",
                 "data": {
+                    "index": index,
                     "config": config,
                 },
             })

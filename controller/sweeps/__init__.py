@@ -36,8 +36,8 @@ class MeasurementSweep(ABC):
         device_dx,
         device_dy,
         data_folder,
-        program_name,
-        program_config,
+        program_names,
+        program_configs,
     ):
         return {
             "timestamp": timestamp(),
@@ -51,13 +51,12 @@ class MeasurementSweep(ABC):
             "device_dx": device_dx,
             "device_dy": device_dy,
             "data_folder": data_folder,
-            "program": program_name,
-            "program_config": program_config,
+            "programs": program_names,
+            "program_configs": program_configs,
         }
     
     @staticmethod
-    def run_single(
-        instr_b1500,
+    def save_metadata(
         user: str,
         sweep_name: str,
         sweep_config: dict,
@@ -70,16 +69,12 @@ class MeasurementSweep(ABC):
         data_folder: str,
         save_dir: str,
         save_data: bool,
-        program: MeasurementProgram,
-        program_config: dict,
-        monitor_channel: EventChannel,
-    ):
-        """Standard internal method to run a program sweep on a single device
-        inside a 2D array of devices. This method used internally by array sweep
-        and single sweep. 
+        programs: list[MeasurementProgram],
+        program_configs: list[dict],
+    ) -> dict:
+        """Save metadata `meta.json` file to save directory.
+        Returns the metadata dict object.
         """
-        result = program.run(instr_b1500=instr_b1500, **program_config)
-        
         sweep_metadata = MeasurementSweep.metadata(
             user=user,
             sweep=sweep_name,
@@ -91,8 +86,8 @@ class MeasurementSweep(ABC):
             device_dx=device_dx,
             device_dy=device_dy,
             data_folder=data_folder,
-            program_name=program.name,
-            program_config=program_config,
+            program_names=[p.name for p in programs],
+            program_configs=program_configs,
         )
         
         if save_data and os.path.exists(data_folder):
@@ -100,11 +95,36 @@ class MeasurementSweep(ABC):
             os.makedirs(path_dir, exist_ok=True)
 
             path_meta = os.path.join(path_dir, "meta.json")
-            path_result_h5 = os.path.join(path_dir, f"{program.name}.h5")
-            path_result_mat = os.path.join(path_dir, f"{program.name}.mat")
             
             with open(path_meta, "w+") as f:
                 json.dump(sweep_metadata, f, indent=2)
+        
+        return sweep_metadata
+
+    @staticmethod
+    def run_single(
+        instr_b1500,
+        data_folder: str,
+        save_dir: str,
+        save_data: bool,
+        sweep_metadata: dict,
+        program: MeasurementProgram,
+        program_config: dict,
+        monitor_channel: EventChannel,
+    ):
+        """Standard internal method to run a program sweep on a single device
+        inside a 2D array of devices. This method used internally by array sweep
+        and single sweep. 
+        """
+        result = program.run(instr_b1500=instr_b1500, **program_config)
+        
+        if save_data and os.path.exists(data_folder):
+            path_dir = os.path.join(data_folder, save_dir)
+            os.makedirs(path_dir, exist_ok=True)
+
+            path_result_h5 = os.path.join(path_dir, f"{program.name}.h5")
+            path_result_mat = os.path.join(path_dir, f"{program.name}.mat")
+            
             export_hdf5(path_result_h5, result)
             export_mat(path_result_mat, result)
         
@@ -124,18 +144,18 @@ class MeasurementSweep(ABC):
     @staticmethod
     @abstractmethod
     def run(
-        user,
-        sweep_config,
-        sweep_save_data,
-        current_die_x,
-        current_die_y,
-        device_dx,
-        device_dy,
-        device_row,
-        device_col,
-        data_folder,
-        program,
-        program_config,
+        user: str,
+        sweep_config: dict,
+        sweep_save_data: bool,
+        current_die_x: int,
+        current_die_y: int,
+        device_dx: float,
+        device_dy: float,
+        device_row: int,
+        device_col: int,
+        data_folder: str,
+        programs: list[MeasurementProgram],
+        program_configs: list[dict],
         instr_b1500=None,
         instr_cascade=None,
         move_chuck=None, # callback to move chuck (x, y) relative to home (start position)

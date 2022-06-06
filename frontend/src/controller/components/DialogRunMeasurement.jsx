@@ -28,8 +28,8 @@ export const DialogRunMeasurement = ({
     deviceRow,
     deviceCol,
     dataFolder,
-    program,
-    programConfig,
+    programs,
+    programConfigs,
     sweep,
     sweepConfig,
     sweepSaveData,
@@ -84,21 +84,7 @@ export const DialogRunMeasurement = ({
                 <Box height="20px"/>
 
                 <Typography component="div" variant="body1">
-                    <Box
-                        sx={{}}
-                    >
-                        <b>Program:</b> {program}
-                    </Box>
-                    <Box
-                        sx={{ border: "1px solid rgba(0, 0, 0, 0.3)", padding: "0px 16px"}}
-                    >
-                        <pre>
-                            {programConfig}
-                        </pre>
-                    </Box>
-                    
-                    <Box height="40px"/>
-
+                    {/* Measurement sweep config */}
                     <Box
                         sx={{}}
                     >
@@ -111,6 +97,38 @@ export const DialogRunMeasurement = ({
                             {sweepConfig}
                         </pre>
                     </Box>
+
+                    <Box height="40px"/>
+
+                    {/* Each measurement program in order */}
+                    <Box
+                        sx={{}}
+                    >
+                        <b>Programs:</b>
+                    </Box>
+                    {programs.map((program, index) => (
+                        <>
+                        <Box
+                            sx={{}}
+                        >
+                            <b>{`${index+1}. ${program}`}</b> 
+                        </Box>
+                        <Box
+                            sx={{ border: "1px solid rgba(0, 0, 0, 0.3)", padding: "0px 16px"}}
+                        >
+                            <pre>
+                                {programConfigs[index]}
+                            </pre>
+                        </Box>
+                        
+                        {/* Spacer */}
+                        <Box height="20px"/>
+                        
+                        </>
+                    ))}
+                    
+                    <Box height="20px"/>
+                    
                 </Typography>
                 
             </DialogContent>

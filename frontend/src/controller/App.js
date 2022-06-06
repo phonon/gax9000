@@ -63,8 +63,8 @@ function App({
 
     // program settings
     const [measurementProgramList, setMeasurementProgramList] = useState([]);
-    const [measurementProgram, setMeasurementProgram] = useState("");
-    const [measurementConfig, setMeasurementConfig] = useState("{}");
+    const [measurementPrograms, setMeasurementPrograms] = useState([""]);
+    const [measurementConfigs, setMeasurementConfigs] = useState(["{}"]);
 
     // sweep settings
     const [sweepList, setSweepList] = useState([]);
@@ -78,6 +78,41 @@ function App({
     
     // measurement status
     const [measurementRunning, setMeasurementRunning] = useState(false);
+
+    // Function to add a new program to end of programs list
+    const addMeasurementProgram = () => {
+        const newPrograms = [...measurementPrograms];
+        newPrograms.push("");
+        const newConfigs = [...measurementConfigs];
+        newConfigs.push("{}");
+        setMeasurementPrograms(newPrograms);
+        setMeasurementConfigs(newConfigs);
+    };
+
+    // Function to remove a program from the programs list
+    const removeMeasurementProgram = (index) => {
+        const newPrograms = [...measurementPrograms];
+        newPrograms.splice(index, 1);
+        const newConfigs = [...measurementConfigs];
+        newConfigs.splice(index, 1);
+        setMeasurementPrograms(newPrograms);
+        setMeasurementConfigs(newConfigs);
+    };
+
+    // Set measurement program at index in programs
+    const setMeasurementProgramAtIndex = (index, value) => {
+        const newPrograms = [...measurementPrograms];
+        newPrograms[index] = value;
+        console.log(index, value, newPrograms);
+        setMeasurementPrograms(newPrograms);
+    };
+
+    // Set measurement config at index in configs
+    const setMeasurementConfigAtIndex = (index, value) => {
+        const newConfigs = [...measurementConfigs];
+        newConfigs[index] = value;
+        setMeasurementConfigs(newConfigs);
+    };
 
     // Function to try and run a measurement.
     // This performs basic checks (e.g. user valid) 
@@ -104,8 +139,8 @@ function App({
                 device_row: parseInt(deviceRow),
                 device_col: parseInt(deviceCol),
                 data_folder: dataFolder,
-                program: measurementProgram,
-                program_config: measurementConfig,
+                programs: measurementPrograms,
+                program_configs: measurementConfigs,
                 sweep: sweep,
                 sweep_config: sweepConfig,
                 sweep_save_data: sweepSaveData,
@@ -164,8 +199,8 @@ function App({
             setDeviceCol(settings.device_col);
             setDataFolder(settings.data_folder);
         });
-        responseHandlers.set("measurement_program_config", ({config}) => {
-            setMeasurementConfig(JSON.stringify(config, null, 2));
+        responseHandlers.set("measurement_program_config", ({index, config}) => {
+            setMeasurementConfigAtIndex(index, JSON.stringify(config, null, 2));
         });
         responseHandlers.set("measurement_sweep_config", ({config}) => {
             setSweepConfig(JSON.stringify(config, null, 2));
@@ -298,11 +333,13 @@ function App({
                         setUserLocal={setMeasurementUser}
                         dataFolder={dataFolder}
                         setDataFolderLocal={setDataFolder}
+                        addMeasurementProgram={addMeasurementProgram}
+                        removeMeasurementProgram={removeMeasurementProgram}
                         programList={measurementProgramList}
-                        program={measurementProgram}
-                        setProgramLocal={setMeasurementProgram}
-                        programConfig={measurementConfig}
-                        setProgramConfigLocal={setMeasurementConfig}
+                        programs={measurementPrograms}
+                        setProgramAtIndex={setMeasurementProgramAtIndex}
+                        programConfigs={measurementConfigs}
+                        setProgramConfigAtIndex={setMeasurementConfigAtIndex}
                         sweepList={sweepList}
                         sweep={sweep}
                         setSweepLocal={setSweep}
@@ -331,8 +368,8 @@ function App({
                 deviceRow={deviceRow}
                 deviceCol={deviceCol}
                 dataFolder={dataFolder}
-                program={measurementProgram}
-                programConfig={measurementConfig}
+                programs={measurementPrograms}
+                programConfigs={measurementConfigs}
                 sweep={sweep}
                 sweepConfig={sweepConfig}
                 sweepSaveData={sweepSaveData}

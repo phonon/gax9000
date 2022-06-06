@@ -61,7 +61,7 @@ const handleSetUserProfile = (axios, username, setUserLocal) => {
     }
 };
 
-const handleChangeMeasurementProgram = (axios, user, oldProgram, oldProgramConfig, newProgram, setProgramLocal) => {
+const handleChangeMeasurementProgram = (axios, user, index, oldProgram, oldProgramConfig, newProgram, setProgramAtIndex) => {
     if ( user === "" ) { // skip empty user
         return
     }
@@ -85,11 +85,12 @@ const handleChangeMeasurementProgram = (axios, user, oldProgram, oldProgramConfi
         data: {
             user: user,
             program: newProgram,
+            index: index,
         },
     });
 
     // set program locally in app
-    setProgramLocal(newProgram);
+    setProgramAtIndex(index, newProgram);
 };
 
 const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, newSweep, setSweepLocal) => {
@@ -133,11 +134,13 @@ export const MeasurementControls = ({
     setUserLocal,
     dataFolder,
     setDataFolderLocal,
+    addMeasurementProgram,
+    removeMeasurementProgram,
     programList,
-    program,
-    setProgramLocal,
-    programConfig,
-    setProgramConfigLocal,
+    programs,
+    setProgramAtIndex,
+    programConfigs,
+    setProgramConfigAtIndex,
     sweepList,
     sweep,
     setSweepLocal,
@@ -162,6 +165,10 @@ export const MeasurementControls = ({
     } else if ( missingUserOrDataFolder ) {
         measurementStatusText = "Missing User or Data Folder";
     }
+
+    let programMenuItems = programList.map((x) =>
+        <MenuItem key={x} value={x}>{x}</MenuItem>
+    );
 
     return (
         <Grid
@@ -240,37 +247,70 @@ export const MeasurementControls = ({
                         spacing={1}
                         direction="row"
                     >
-                        {/* Measurement program config */}
+                        {/* Measurement program configs */}
                         <Grid item xs={6}>
-                            <Box>
-                                <FormControl fullWidth>
-                                    <InputLabel id="measurement-program-select-label">Program</InputLabel>
-                                    <Select
-                                        id="measurement-program-select"
-                                        labelId="measurement-program-select-label"
-                                        value={program}
-                                        label="Program"
-                                        size="small"
-                                        onChange={(e) => handleChangeMeasurementProgram(axios, user, program, programConfig, e.target.value, setProgramLocal)}
+                            {/* create program selection + editor for each index */}
+                            {programs.map((program, index) =>
+                                <Box key={index} sx={{padding: "0px 0px 16px 0px"}}>
+                                    <Grid
+                                        container
+                                        spacing={0}
+                                        direction="row"
                                     >
-                                        {programList.map((x) =>
-                                            <MenuItem key={x} value={x}>{x}</MenuItem>
-                                        )}
-                                    </Select>
-                                </FormControl>
-                                <CodeMirror
-                                    value={programConfig}
-                                    theme="light"
-                                    height="260px"
-                                    minHeight="200px"
-                                    extensions={[
-                                        codeMirrorJsonExtension(),
-                                    ]}
-                                    onChange={(value, viewUpdate) => {
-                                        setProgramConfigLocal(value);
-                                    }}
-                                />
-                            </Box>
+                                        <Grid item xs={10.8}>
+                                            <FormControl fullWidth>
+                                                <InputLabel id="measurement-program-select-label">Program</InputLabel>
+                                                <Select
+                                                    id="measurement-program-select"
+                                                    labelId="measurement-program-select-label"
+                                                    value={program}
+                                                    label="Program"
+                                                    size="small"
+                                                    onChange={(e) => handleChangeMeasurementProgram(axios, user, index, program, programConfigs[index], e.target.value, setProgramAtIndex)}
+                                                >
+                                                    {programMenuItems}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+
+                                        {/* Button add new program */}
+                                        <Grid
+                                            item xs={1.2}
+                                        >
+                                            <Button
+                                                fullWidth
+                                                variant="outlined"
+                                                color="error"
+                                                size="large"
+                                                sx={{width: "100%", minWidth: "0px"}}
+                                                onClick={() => removeMeasurementProgram(index)}
+                                            >
+                                                ✖
+                                            </Button>
+                                        </Grid>
+                                    </Grid>
+                                    <CodeMirror
+                                        value={programConfigs[index]}
+                                        theme="light"
+                                        height="200px"
+                                        minHeight="200px"
+                                        extensions={[
+                                            codeMirrorJsonExtension(),
+                                        ]}
+                                        onChange={(value, viewUpdate) => {
+                                            setProgramConfigAtIndex(index, value);
+                                        }}
+                                    />
+                                </Box>
+                            )}
+                            {/* Button add new program */}
+                            <Button
+                                fullWidth
+                                variant="outlined"
+                                onClick={addMeasurementProgram}
+                            >
+                                Add program
+                            </Button>
                         </Grid>
                         
                         {/* Measurement sweep config */}
@@ -304,47 +344,46 @@ export const MeasurementControls = ({
                                     }}
                                 />
                                 
+                                {/* Start measurement button and save data configs */}
                                 <FormGroup sx={{flexDirection: "row"}}>
                                     <FormControlLabel control={<Checkbox checked={sweepSaveData} onChange={(e) => setSweepSaveDataLocal(e.target.checked)}/>} label="Save Data" />
                                     <FormControlLabel control={<Checkbox checked={sweepSaveImage} onChange={(e) => setSweepSaveImageLocal(e.target.checked)}/>} label="Save Image" />
                                 </FormGroup>
+
+                                <Grid item>
+                                    <Grid
+                                        container
+                                        spacing={1}
+                                        direction="row"
+                                        >                                        
+                                        <Grid item xs={10}>
+                                            <Button
+                                                fullWidth
+                                                variant={measurementRunning ? "outlined" : "contained"}
+                                                onClick={handleRunMeasurement}
+                                                disabled={missingUserOrDataFolder}
+                                                >
+                                                {measurementStatusText}
+                                            </Button>
+                                        </Grid>
+                                        <Grid item xs={2}>
+                                            <Button
+                                                fullWidth
+                                                variant="outlined"
+                                                color="error"
+                                                onClick={handleCancelMeasurement}
+                                                >
+                                                Stop
+                                            </Button>
+                                        </Grid>
+                                    </Grid>
+
+                                </Grid>
                             </Box>
                         </Grid>
+
                     </Grid>
                 </Box>
-            </Grid>
-
-            {/* Start measurement button and save data configs */}
-            <Grid item sx={{width: "100%"}}>
-                <Grid
-                    container
-                    spacing={1}
-                    direction="row"
-                >
-                    <Grid item xs={6}/>
-                    
-                    <Grid item xs={4}>
-                        <Button
-                            fullWidth
-                            variant={measurementRunning ? "outlined" : "contained"}
-                            onClick={handleRunMeasurement}
-                            disabled={missingUserOrDataFolder}
-                        >
-                            {measurementStatusText}
-                        </Button>
-                    </Grid>
-                    <Grid item xs={2}>
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            color="error"
-                            onClick={handleCancelMeasurement}
-                        >
-                            Stop
-                        </Button>
-                    </Grid>
-                </Grid>
-                
             </Grid>
         </Grid>
     );

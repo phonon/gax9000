@@ -37,8 +37,8 @@ class SweepArray(MeasurementSweep):
         device_row,
         device_col,
         data_folder,
-        program,
-        program_config,
+        programs,
+        program_configs,
         instr_b1500=None,
         instr_cascade=None,
         move_chuck=None, # callback to move chuck (x, y) relative to home (start position)
@@ -59,13 +59,10 @@ class SweepArray(MeasurementSweep):
             - sweep_order = "row": Sweep cols in row, then change row. str is "r0_c0", "r0_c1", ...
             - sweep_order = "col": Sweep rows in col, then change col. str is "c0_r0", "c0_r1", ...
             """
-            logging.info(f"[row={row}, col={col}] Running {program.name}...")
-
             t_measurement = timestamp()
-            save_dir = f"gax_{row_col_str}_{program.name}_{t_measurement}"
+            save_dir = f"gax_{row_col_str}_{t_measurement}"
 
-            MeasurementSweep.run_single(
-                instr_b1500=instr_b1500,
+            sweep_metadata = MeasurementSweep.save_metadata(
                 user=user,
                 sweep_name=SweepArray.name,
                 sweep_config=sweep_config,
@@ -78,14 +75,26 @@ class SweepArray(MeasurementSweep):
                 data_folder=data_folder,
                 save_dir=save_dir,
                 save_data=sweep_save_data,
-                program=program,
-                program_config=program_config,
-                monitor_channel=monitor_channel,
+                programs=programs,
+                program_configs=program_configs,
             )
+
+            for pr, pr_config in zip(programs, program_configs):
+                logging.info(f"[row={row}, col={col}] Running {pr.name}...")
+                MeasurementSweep.run_single(
+                    instr_b1500=instr_b1500,
+                    data_folder=data_folder,
+                    save_dir=save_dir,
+                    save_data=sweep_save_data,
+                    sweep_metadata=sweep_metadata,
+                    program=pr,
+                    program_config=pr_config,
+                    monitor_channel=monitor_channel,
+                )
 
             # yields thread for other tasks
             # TODO: proper multithreaded task
-            gevent.sleep(0.1)
+            gevent.sleep(0.2)
 
         if sweep_order == "row":
             for ny, row in enumerate(range(device_row, device_row + num_rows)):

@@ -8,8 +8,10 @@ from enum import Enum, auto
 # list of available program names (hardcoded)
 MEASUREMENT_PROGRAMS = [
     "debug",
+    "debug2",
     "keysight_id_vds",
     "keysight_id_vgs",
+    "keysight_rram_1t1r",
 ]
 
 class MeasurementProgram(ABC):
@@ -39,12 +41,18 @@ class MeasurementProgram(ABC):
         if s == "debug":
             from controller.programs.debug import ProgramDebug
             return ProgramDebug
+        if s == "debug2":
+            from controller.programs.debug2 import ProgramDebug2
+            return ProgramDebug2
         elif s == "keysight_id_vds":
             from controller.programs.keysight_id_vds import ProgramKeysightIdVds
             return ProgramKeysightIdVds
         elif s == "keysight_id_vgs":
             from controller.programs.keysight_id_vgs import ProgramKeysightIdVgs
             return ProgramKeysightIdVgs
+        elif s == "keysight_rram_1t1r":
+            from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1R
+            return ProgramKeysightRram1T1R
         else:
             logging.error(f"Unknown program type: {name}")
             return None

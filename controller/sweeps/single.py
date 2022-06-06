@@ -32,8 +32,8 @@ class SweepSingle(MeasurementSweep):
         device_row,
         device_col,
         data_folder,
-        program,
-        program_config,
+        programs,
+        program_configs,
         instr_b1500=None,
         instr_cascade=None,
         move_chuck=None,
@@ -42,10 +42,9 @@ class SweepSingle(MeasurementSweep):
     ):
         """Run the sweep. Just a wrapper around MeasurementSweep.run_single."""
         t_measurement = timestamp()
-        save_dir = f"gax_r{device_row}_c{device_col}_{program.name}_{t_measurement}"
+        save_dir = f"gax_r{device_row}_c{device_col}_{t_measurement}"
 
-        MeasurementSweep.run_single(
-            instr_b1500=instr_b1500,
+        sweep_metadata = MeasurementSweep.save_metadata(
             user=user,
             sweep_name=SweepSingle.name,
             sweep_config=sweep_config,
@@ -58,7 +57,18 @@ class SweepSingle(MeasurementSweep):
             data_folder=data_folder,
             save_dir=save_dir,
             save_data=sweep_save_data,
-            program=program,
-            program_config=program_config,
-            monitor_channel=monitor_channel,
+            programs=programs,
+            program_configs=program_configs,
         )
+
+        for pr, pr_config in zip(programs, program_configs):
+            MeasurementSweep.run_single(
+                instr_b1500=instr_b1500,
+                data_folder=data_folder,
+                save_dir=save_dir,
+                save_data=sweep_save_data,
+                sweep_metadata=sweep_metadata,
+                program=pr,
+                program_config=pr_config,
+                monitor_channel=monitor_channel,
+            )
