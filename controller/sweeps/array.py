@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import gevent
 from controller.sweeps import MeasurementSweep
 from controller.util import timestamp, np_dict_to_list_dict
 from controller.util.io import export_hdf5, export_mat
@@ -81,6 +82,10 @@ class SweepArray(MeasurementSweep):
                 program_config=program_config,
                 monitor_channel=monitor_channel,
             )
+
+            # yields thread for other tasks
+            # TODO: proper multithreaded task
+            gevent.sleep(0.1)
 
         if sweep_order == "row":
             for ny, row in enumerate(range(device_row, device_row + num_rows)):
