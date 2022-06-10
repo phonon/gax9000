@@ -76,4 +76,4 @@ class SweepSingle(MeasurementSweep):
 
             # yields thread for other tasks (so data gets pushed)
             # TODO: proper multithreaded task
-            gevent.sleep(0.2)
+            gevent.sleep(0.3)

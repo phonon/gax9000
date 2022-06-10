@@ -111,7 +111,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # measurement compliance settings
         id_compliance = 0.100 # 100 mA complience
         ig_compliance = 0.010 # 10 mA complience
-        pow_compliance = abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
+        pow_compliance = 2 * abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
 
         # reset instrument
         instr_b1500.write("*RST")
@@ -277,6 +277,9 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
         # ===========================================================
         for idx_bias, v_ds_val in enumerate(v_ds_range):
+            # round to mV
+            v_ds_val = round(v_ds_val, 3)
+
             for idx_dir, sweep_type in SweepType.iter_with_sweep_index(sweeps):
                 print(f"==============================")
                 print(f"Measuring step (Vds = {v_ds_val} V)...")

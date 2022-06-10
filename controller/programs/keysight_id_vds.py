@@ -118,9 +118,10 @@ class ProgramKeysightIdVds(MeasurementProgram):
         time_i_g_out = np.full(data_shape, np.nan)
 
         # measurement compliance settings
-        id_compliance = 0.100 # 100 mA complience
-        ig_compliance = 0.010 # 10 mA complience
-        pow_compliance = abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
+        id_compliance = 0.1 # 100 mA complience
+        ig_compliance = 0.01 # 1 mA complience
+        # pow_compliance = 2 * abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
+        pow_compliance = 0.3 # ??? random abort error?
 
         # reset instrument
         instr_b1500.write("*RST")
@@ -275,7 +276,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         WM_ABORT_ENABLE = 2
         WM_POST_START_VALUE = 1
         WM_POST_STOP_VALUE = 2
-        instr_b1500.write(f"WM {WM_ABORT_DISABLE},{WM_POST_STOP_VALUE}")
+        instr_b1500.write(f"WM {WM_ABORT_ENABLE},{WM_POST_START_VALUE}")
         query_error(instr_b1500)
 
         # timestamp reset
@@ -286,9 +287,12 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
         # ===========================================================
         for idx_bias, v_gs_val in enumerate(v_gs_range):
+            # round to mV
+            v_gs_val = round(v_gs_val, 3) # round to mV
+
             for idx_dir, sweep_type in SweepType.iter_with_sweep_index(sweeps):
                 print(f"==============================")
-                print(f"Measuring step {idx_bias}/{len(v_gs_range)} (Vgs = {v_gs_val} V)...")
+                print(f"Measuring step {idx_bias+1}/{len(v_gs_range)} (Vgs = {v_gs_val} V)...")
                 print(f"------------------------------")
                 
                 # write voltage staircase waveform

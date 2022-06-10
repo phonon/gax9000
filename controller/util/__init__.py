@@ -37,7 +37,7 @@ def into_sweep_range(v) -> list:
         # abs required to ensure no negative points if stop < start
         # round required due to float precision errors, avoids .9999 npoint values
         npoints = 1 + int(abs(round((v["stop"] - v["start"])/v["step"])))
-        return np.linspace(v["start"], v["stop"], npoints)
+        return np.linspace(v["start"], v["stop"], npoints, dtype=np.float64)
     else:
         raise ValueError(f"Sweep range is an invalid format: {v}")
 

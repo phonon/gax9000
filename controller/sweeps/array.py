@@ -94,11 +94,11 @@ class SweepArray(MeasurementSweep):
 
                 # yields thread for other tasks (so data gets pushed)
                 # TODO: proper multithreaded task
-                gevent.sleep(0.2)
+                gevent.sleep(0.3)
             
             # yields thread for other tasks
             # TODO: proper multithreaded task
-            gevent.sleep(0.2)
+            gevent.sleep(0.3)
 
         if sweep_order == "row":
             for ny, row in enumerate(range(device_row, device_row + num_rows)):
