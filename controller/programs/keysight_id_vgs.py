@@ -10,13 +10,6 @@ from controller.programs import MeasurementProgram, SweepType
 from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks
 
 
-def query_error(
-    instr_b1500,
-):
-    res = instr_b1500.query("ERRX?")
-    if res[0:2] != "+0":
-        raise RuntimeError(res)
-
 class ProgramKeysightIdVgs(MeasurementProgram):
     """Implement Id-Vgs sweep with constant Vds biases.
     The Id-Vgs measurement is a staircase sweep (pg 2-8).
@@ -70,6 +63,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         v_sub=0.0,
         negate_id=False,
         sweep_direction="fr",
+        stop_on_error=False,
     ) -> dict:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
@@ -84,6 +78,14 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
+        
+        # error check
+        def query_error(instr_b1500):
+            res = instr_b1500.query("ERRX?")
+            if res[0:2] != "+0":
+                logging.error(f"{res}")
+                if stop_on_error:
+                    raise RuntimeError(res)
         
         # convert v_ds and v_gs into a list of values depending on variable object type
         v_gs_range = into_sweep_range(v_gs)
@@ -294,7 +296,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                     stop=v_gs_range[-1],
                     steps=len(v_gs_range),
                     icomp=id_compliance,
-                    pcomp=pow_compliance,
+                    pcomp=None,
                 ))
                 query_error(instr_b1500)
                 

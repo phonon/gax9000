@@ -67,7 +67,7 @@ class SweepType(Enum):
     FORWARD_REVERSE = auto()  # [start, stop, start]
     REVERSE_FORWARD = auto()  # [stop, start, stop]
 
-    def b1500_wv_sweep_command(self, ch, range, start, stop, steps, icomp, pcomp):
+    def b1500_wv_sweep_command(self, ch, range, start, stop, steps, icomp, pcomp=None):
         """This returns b1500 GPIB WV voltage sweep mode command (4-250, pg 570):
             WV ch,mode,range,start,stop,step[,Icomp[,Pcomp]]
         Parameters:
@@ -85,18 +85,20 @@ class SweepType(Enum):
             3: linear sweep, double-stair start to stop to start
             4: log sweep, double-stair, start to stop to start
         """
+        pow_comp = f",{pcomp}" if pcomp is not None else ""
+
         if self == SweepType.FORWARD:
             mode = 1
-            return f"WV {ch},{mode},{range},{start},{stop},{steps},{icomp},{pcomp}"
+            return f"WV {ch},{mode},{range},{start},{stop},{steps},{icomp}{pow_comp}"
         elif self == SweepType.REVERSE:
             mode = 1
-            return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp},{pcomp}"
+            return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
         elif self == SweepType.FORWARD_REVERSE:
             mode = 3
-            return f"WV {ch},{mode},{range},{start},{stop},{steps},{icomp},{pcomp}"
+            return f"WV {ch},{mode},{range},{start},{stop},{steps},{icomp}{pow_comp}"
         elif self == SweepType.REVERSE_FORWARD:
             mode = 3
-            return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp},{pcomp}"
+            return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
         else:
             raise ValueError(f"Invalid SweepType: {self}")
 

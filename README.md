@@ -41,6 +41,7 @@ cd frontend
 npm install
 ```
 
+
 # Usage
 First run server using script
 ```
@@ -50,12 +51,22 @@ This will by default use `./data` as the real instance data folder.
 The first time the server is run, it will copy default config files
 in `controller/assets/` into the data folder.
 
+
+# Installation/Usage Issues
+- If error occurs when generating SSL keys (for local HTTPS) on Windows, this may be
+due to missing `OPENSSL_CONF` path. Open Windows > Environment Variables and add a
+`OPENSSL_CONF`. If using miniconda, this can be set to:
+```
+OPENSSL_CONF: C:\Users\[USER]\miniconda3\Library\ssl\openssl.cnf
+```
+
 # Architecture
 Python backend controller manages the instrument GPIB connections
 and acts as a web server. The javascript frontend both acts to
 update backend controller settings and run measurements, and 
 reads real-time signals from controller web server (using SSE) and
 reports measurement results.
+
 
 # Issues
 ## Antivirus blocking SSE
@@ -77,3 +88,9 @@ https://security.stackexchange.com/questions/74345/provide-subjectaltname-to-ope
 The `run.sh` or `run.bat` script will generate a certificate file in 
 `data/ssl/cert.pem`. On windows, you will need to go into Certificates
 and add `cert.pem` as a Trusted Root Certificate for local testing.
+
+In Windows, go to
+```
+Manage User Certificates > Trusted Root Certification Authorities > Certificates
+```
+Add the generated `cert.pem` to the trusted certification authorities.
