@@ -48,8 +48,6 @@ First run server using script
 ./run.sh 
 ```
 This will by default use `./data` as the real instance data folder.
-The first time the server is run, it will copy default config files
-in `controller/assets/` into the data folder.
 
 
 # Installation/Usage Issues
@@ -94,3 +92,14 @@ In Windows, go to
 Manage User Certificates > Trusted Root Certification Authorities > Certificates
 ```
 Add the generated `cert.pem` to the trusted certification authorities.
+
+## SMU vs. Slot ID
+The program `probe` settings are intended to use "SMU" inputs, similar
+to how one would manually run programs on the B1500 tool. However,
+over GPIB, we are actually sending `slot` numbers, NOT SMU numbers.
+The B1500 slots are not necessarily configured to match SMU number.
+e.g. Slot 2 could house SMU 3. In that case, the "probe" for SMU 3 should
+actually be 2 not 3.
+
+Optional config settings "smu_slots" maps SMU number to actual slot number,
+which will need to be changed before sending data through GPIB.

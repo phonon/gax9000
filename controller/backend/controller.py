@@ -167,11 +167,13 @@ class ControllerSettings():
         gpib_cascade: int = 22,        # gpib id of cascade instrument
         users: list = ["public"],      # list of username strings
         invert_direction: bool = True, # invert chuck movement directions (if true, topleft is (+x,+y))
+        smu_slots: dict = {},          # map SMU # to slot #
     ):
         self.gpib_b1500 = gpib_b1500
         self.gpib_cascade = gpib_cascade
         self.users = users
         self.invert_direction = invert_direction
+        self.smu_slots = smu_slots
 
     def default():
         """Return a default settings object."""
@@ -180,6 +182,7 @@ class ControllerSettings():
             gpib_cascade=22,
             users=["public"],
             invert_direction=True,
+            smu_slots={},
         )
 
 class SignalCancelTask():
@@ -566,6 +569,12 @@ class Controller():
             logging.error(f"Data folder {data_folder} does not exist. Cancelling measurement sweep.")
             callback(False)
             return
+        
+        # inject global settings into program configs:
+        # - smu slot settings
+        if len(self.settings.smu_slots) > 0:
+            for pr_config in program_configs:
+                pr_config["smu_slots"] = self.settings.smu_slots
     
         # try acquire instrument task lock
         if self.task_lock.acquire(blocking=False, timeout=None):

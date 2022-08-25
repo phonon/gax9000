@@ -1,3 +1,4 @@
+import logging
 import traceback
 from dis import Instruction
 from multiprocessing.sharedctypes import Value
@@ -7,7 +8,7 @@ import pyvisa
 import logging
 from tabulate import tabulate
 from controller.programs import MeasurementProgram, SweepType
-from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks
+from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks, map_smu_to_slot
 
 
 class ProgramKeysightIdVgs(MeasurementProgram):
@@ -50,20 +51,21 @@ class ProgramKeysightIdVgs(MeasurementProgram):
 
     def run(
         instr_b1500=None,
-        probe_gate=8,
-        probe_source=1,
-        probe_drain=3,
+        probe_gate=2,
+        probe_source=7,
+        probe_drain=6,
         probe_sub=9,
         v_gs={
-            "start": -1.2,
-            "stop": 1.2,
+            "start": -2.0,
+            "stop": 2.0,
             "step": 0.1,
         },
-        v_ds=[0.050, 1.2],
+        v_ds=[-0.050, -1.2],
         v_sub=0.0,
         negate_id=False,
         sweep_direction="fr",
-        stop_on_error=False,
+        stop_on_error=True,
+        smu_slots={}, # map SMU number => actual slot number
     ) -> dict:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
@@ -75,10 +77,23 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         print(f"v_sub = {v_sub}")
         print(f"negate_id = {negate_id}")
         print(f"sweep_direction = {sweep_direction}")
+        print(f"smu_slots = {smu_slots}")
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
         
+        # map smu probes to instrument slots
+        if len(smu_slots) > 0:
+            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
+            probe_source = map_smu_to_slot(smu_slots, probe_source)
+            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_sub = map_smu_to_slot(smu_slots, probe_sub)
+            logging.info("Mapped SMU to slot:")
+            logging.info(f"- probe_gate -> {probe_gate}")
+            logging.info(f"- probe_source -> {probe_source}")
+            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_sub -> {probe_sub}")
+
         # error check
         def query_error(instr_b1500):
             res = instr_b1500.query("ERRX?")
@@ -138,8 +153,11 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         ADC_TYPE_PULSE = 2
         adc_type = ADC_TYPE_HISPEED
         instr_b1500.write(f"AAD {probe_drain},{adc_type}")
+        query_error(instr_b1500)
         instr_b1500.write(f"AAD {probe_source},{adc_type}")
+        query_error(instr_b1500)
         instr_b1500.write(f"AAD {probe_gate},{adc_type}")
+        query_error(instr_b1500)
         instr_b1500.write(f"AAD {probe_sub},{adc_type}")
         query_error(instr_b1500)
 
@@ -173,9 +191,16 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # zero voltage to probes, DV (pg 4-78) cmd sets DC voltage on channels:
         #   DV {probe},{vrange},{v},{icompliance}
         instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
+        print(f"DV {probe_gate},0,0,{ig_compliance}")
+        query_error(instr_b1500)
         instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
+        print(f"DV {probe_sub},0,0,{id_compliance}")
+        query_error(instr_b1500)
         instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
+        print(f"DV {probe_drain},0,0,{id_compliance}")
+        query_error(instr_b1500)
         instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
+        print(f"DV {probe_source},0,0,{id_compliance}")
         query_error(instr_b1500)
 
         # set measurement mode to multi-channel staircase sweep (MODE = 16) (4-151, pg 471):
@@ -337,6 +362,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 # values chunked for each measurement point:
                 #   [ [vgs0, id0, ig0] , [vgs1, id1, ig1], ... ]
                 val_chunks = [ x for x in iter_chunks(vals, 7) ]
+                print(val_chunks)
 
                 # split val chunks into forward/reverse sweep components:
                 if sweep_type == SweepType.FORWARD or sweep_type == SweepType.REVERSE:
@@ -393,6 +419,8 @@ if __name__ == "__main__":
     """Tests running the program
     """
     from scipy.io import savemat
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
     # res = "NCT+5.55189E+00,NCI+0.00005E-09,NAT+5.66104E+00,NAI+0.00000E-09,NHT+5.77022E+00,NHI+0.00010E-09,WHV-1.20000E+00,NCT+5.83624E+00,NCI+0.00000E-09,NAT+5.85902E+00,NAI+0.00000E-09,NHT+5.96819E+00,NHI+0.00015E-09,WHV-1.10000E+00,NCT+6.03426E+00,NCI+0.00000E-09,NAT+6.05703E+00,NAI+0.00010E-09,NHT+6.16623E+00,NHI+0.00000E-09,WHV-1.00000E+00,NCT+6.23234E+00,NCI+0.00000E-09,NAT+6.25518E+00,NAI+0.00000E-09,NHT+6.36435E+00,NHI+0.00010E-09,WHV-0.90000E+00,NCT+6.43042E+00,NCI+0.00005E-09,NAT+6.45328E+00,NAI+0.00005E-09,NHT+6.56246E+00,NHI+0.00005E-09,WHV-0.80000E+00,NCT+6.62855E+00,NCI+0.00015E-09,NAT+6.65140E+00,NAI+0.00005E-09,NHT+6.76060E+00,NHI+0.00010E-09,WHV-0.70000E+00,NCT+6.82667E+00,NCI+0.00000E-09,NAT+6.84944E+00,NAI+0.00000E-09,NHT+6.95864E+00,NHI+0.00015E-09,WHV-0.60000E+00,NCT+7.02471E+00,NCI+0.00010E-09,NAT+7.04756E+00,NAI+0.00005E-09,NHT+7.15675E+00,NHI+0.00010E-09,WHV-0.50000E+00,NCT+7.22284E+00,NCI+0.00005E-09,NAT+7.24569E+00,NAI-0.00010E-09,NHT+7.35487E+00,NHI+0.00000E-09,WHV-0.40000E+00,NCT+7.42094E+00,NCI+0.00010E-09,NAT+7.44379E+00,NAI+0.00015E-09,NHT+7.55299E+00,NHI+0.00010E-09,WHV-0.30000E+00,NCT+7.61906E+00,NCI+0.00005E-09,NAT+7.64190E+00,NAI+0.00010E-09,NHT+7.75107E+00,NHI+0.00015E-09,WHV-0.20000E+00,NCT+7.81712E+00,NCI+0.00000E-09,NAT+7.83997E+00,NAI+0.00010E-09,NHT+7.94907E+00,NHI+0.00005E-09,WHV-0.10000E+00,NCT+8.01521E+00,NCI+0.00000E-09,NAT+8.03806E+00,NAI+0.00010E-09,NHT+8.14722E+00,NHI+0.00015E-09,WHV+0.00000E+00,NCT+8.21331E+00,NCI+0.00000E-09,NAT+8.23608E+00,NAI-0.00005E-09,NHT+8.34523E+00,NHI+0.00000E-09,WHV+0.10000E+00,NCT+8.41130E+00,NCI+0.00000E-09,NAT+8.43407E+00,NAI+0.00010E-09,NHT+8.54324E+00,NHI+0.00015E-09,WHV+0.20000E+00,NCT+8.60933E+00,NCI+0.00000E-09,NAT+8.63209E+00,NAI+0.00015E-09,NHT+8.74126E+00,NHI+0.00015E-09,WHV+0.30000E+00,NCT+8.80730E+00,NCI+0.00000E-09,NAT+8.83016E+00,NAI+0.00005E-09,NHT+8.93933E+00,NHI+0.00010E-09,WHV+0.40000E+00,NCT+9.00542E+00,NCI+0.00010E-09,NAT+9.02826E+00,NAI+0.00000E-09,NHT+9.13741E+00,NHI+0.00015E-09,WHV+0.50000E+00,NCT+9.20348E+00,NCI+0.00000E-09,NAT+9.22632E+00,NAI+0.00010E-09,NHT+9.33545E+00,NHI+0.00005E-09,WHV+0.60000E+00,NCT+9.40154E+00,NCI+0.00000E-09,NAT+9.42431E+00,NAI+0.00000E-09,NHT+9.53348E+00,NHI+0.00010E-09,WHV+0.70000E+00,NCT+9.59954E+00,NCI-0.00005E-09,NAT+9.62241E+00,NAI+0.00010E-09,NHT+9.73154E+00,NHI+0.00000E-09,WHV+0.80000E+00,NCT+9.79756E+00,NCI+0.00010E-09,NAT+9.82043E+00,NAI+0.00005E-09,NHT+9.92957E+00,NHI+0.00015E-09,WHV+0.90000E+00,NCT+9.99564E+00,NCI+0.00010E-09,NAT+1.00184E+01,NAI+0.00015E-09,NHT+1.01276E+01,NHI+0.00000E-09,WHV+1.00000E+00,NCT+1.01936E+01,NCI+0.00005E-09,NAT+1.02165E+01,NAI+0.00015E-09,NHT+1.03256E+01,NHI+0.00015E-09,WHV+1.10000E+00,NCT+1.03917E+01,NCI+0.00000E-09,NAT+1.04145E+01,NAI+0.00005E-09,NHT+1.05236E+01,NHI+0.00005E-09,EHV+1.20000E+00"
     # print(res)
     # vals = res.strip().split(",")
@@ -407,12 +435,26 @@ if __name__ == "__main__":
     # print(tabulate(val_table, headers=["v_ds [V]", "v_gs [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
 
     # exit()
+    
+    # smu slot mappings (for gax2)
+    # smu_slots = {}
+    smu_slots = {
+        "1": 2,
+        "2": 3,
+        "3": 4,
+        "4": 5,
+        "5": 6,
+        "6": 7,
+        "7": 8,
+        "8": 9,
+        "9": 10
+    }
 
     rm = pyvisa.ResourceManager()
     print(rm.list_resources())
 
     instr_b1500 = rm.open_resource(
-        "GPIB0::16::INSTR",
+        "GPIB0::17::INSTR",
         read_termination="\n",
         write_termination="\n",
     )
@@ -425,6 +467,7 @@ if __name__ == "__main__":
         try:
             result = ProgramKeysightIdVgs.run(
                 instr_b1500=instr_b1500,
+                smu_slots=smu_slots,
             )
             # print(result)
             savemat("debug/keysight_id_vgs.mat", result, appendmat=False)
@@ -440,4 +483,3 @@ if __name__ == "__main__":
     # done, turn off
     print("MEASUREMENT DONE, TURNING OFF SMUs WITH CL")
     instr_b1500.write("CL")
-    query_error(instr_b1500)

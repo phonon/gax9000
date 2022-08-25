@@ -80,3 +80,16 @@ def parse_keysight_str_values(vals: list) -> list:
         nums.append(float(s[idx:]))
 
     return nums
+
+def map_smu_to_slot(
+    smu_slots: dict,
+    smu,
+) -> int:
+    """Convenience function to map an SMU number of string key
+    to a GPIB slot number using smu_slots dict."""
+    if smu in smu_slots:
+        return smu_slots[smu]
+    elif str(smu) in smu_slots:
+        return smu_slots[str(smu)]
+    else:
+        return smu
