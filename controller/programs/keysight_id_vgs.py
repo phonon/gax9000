@@ -36,7 +36,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         return {
             "probe_gate": 8,
             "probe_source": 1,
-            "probe_drain": 3,
+            "probe_drain": 4,
             "probe_sub": 9,
             "v_gs": {
                 "start": -1.2,
