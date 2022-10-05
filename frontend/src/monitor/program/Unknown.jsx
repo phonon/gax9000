@@ -1,11 +1,8 @@
 /**
- * Render unknown program. Just show program config.
+ * Render unknown program. Just show program name and config.
  */
 
  import {
-    Accordion, AccordionSummary, AccordionDetails,
-    Box,
-    Table, TableContainer, TableHead, TableRow, TableCell, TableBody,
     Typography,
 } from "@mui/material";
 

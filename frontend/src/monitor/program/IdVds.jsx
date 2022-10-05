@@ -20,7 +20,7 @@ export const ProgramIdVds = ({
     console.log(metadata);
     console.log(data);
 
-    const metadataString = JSON.stringify(metadata, null, 2);
+    const measurementConfigString = JSON.stringify(metadata.config, null, 2);
 
     // get num points/bias points from data shape: (bias, sweeps, points)
     const numBias = data.v_ds.length;
@@ -140,7 +140,7 @@ export const ProgramIdVds = ({
                     <AccordionDetails>
                         <Typography component="div" variant="body1">
                             <pre style={{overflow: "scroll"}}>
-                                {metadataString}
+                                {measurementConfigString}
                             </pre>
                         </Typography>
                     </AccordionDetails>

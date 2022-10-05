@@ -1,5 +1,5 @@
 import React from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import axios from "axios";
 import App from "./App";
 
@@ -8,11 +8,12 @@ const api = axios.create({
     baseURL: "https://localhost:9000",
 });
 
-ReactDOM.render(
+const container = document.getElementById("root");
+const root = createRoot(container);
+root.render(
     <React.StrictMode>
         <App
             axios={api}
         />
-    </React.StrictMode>,
-    document.getElementById("root"),
+    </React.StrictMode>
 );

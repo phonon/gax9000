@@ -20,10 +20,10 @@ export const ProgramDebug = ({
     console.log(metadata);
     console.log(data);
 
-    const metadataString = JSON.stringify(metadata, null, 2);
+    const measurementConfigString = JSON.stringify(metadata.config, null, 2);
 
     // get num points/bias points
-    const numBias = data.v_gs.length;
+    const numBias = metadata.step !== undefined ? metadata.step : data.v_gs.length;
     const numSweeps = data.v_gs[0].length;
     const numPoints = data.v_gs[0][0].length;
 
@@ -149,7 +149,7 @@ export const ProgramDebug = ({
                     <AccordionDetails>
                         <Typography component="div" variant="body1">
                             <pre style={{overflow: "scroll"}}>
-                                {metadataString}
+                                {measurementConfigString}
                             </pre>
                         </Typography>
                     </AccordionDetails>
