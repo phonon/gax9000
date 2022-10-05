@@ -41,13 +41,18 @@ def into_sweep_range(v) -> list:
     else:
         raise ValueError(f"Sweep range is an invalid format: {v}")
 
-def np_dict_to_list_dict(d: dict) -> list:
-    """Convert dict of numpy ndarrays dict to list of dicts"""
+def dict_np_array_to_json_array(d: dict) -> dict:
+    """Convert dict of numpy ndarrays to a dict of regular lists.
+    Perform additional santization:
+    - Convert NaN to null
+    """
     import numpy as np
+    from sys import float_info
     x = {}
     for k, v in d.items():
         if isinstance(v, np.ndarray):
-            x[k] = v.tolist()
+            # replaces nan with system max float (= f64 max = 1.7976931348623157e+308)
+            x[k] = np.nan_to_num(v, copy=True, nan=float_info.max).tolist()
         else:
             x[k] = v
     return x

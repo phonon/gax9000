@@ -8,7 +8,7 @@ from enum import Enum, auto
 # list of available program names (hardcoded)
 MEASUREMENT_PROGRAMS = [
     "debug",
-    "debug2",
+    "debug_multistep",
     "keysight_id_vds",
     "keysight_id_vgs",
     "keysight_rram_1t1r",
@@ -41,9 +41,9 @@ class MeasurementProgram(ABC):
         if s == "debug":
             from controller.programs.debug import ProgramDebug
             return ProgramDebug
-        if s == "debug2":
-            from controller.programs.debug2 import ProgramDebug2
-            return ProgramDebug2
+        if s == "debug_multistep":
+            from controller.programs.debug import ProgramDebugMultistep
+            return ProgramDebugMultistep
         elif s == "keysight_id_vds":
             from controller.programs.keysight_id_vds import ProgramKeysightIdVds
             return ProgramKeysightIdVds

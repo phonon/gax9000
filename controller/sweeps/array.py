@@ -3,7 +3,7 @@ import logging
 import json
 import gevent
 from controller.sweeps import MeasurementSweep
-from controller.util import timestamp, np_dict_to_list_dict
+from controller.util import timestamp, dict_np_array_to_json_array
 from controller.util.io import export_hdf5, export_mat
 
 class SweepArray(MeasurementSweep):

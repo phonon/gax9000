@@ -7,7 +7,7 @@ import os
 from abc import ABC, abstractmethod
 from controller.programs import MeasurementProgram
 from controller.sse import EventChannel
-from controller.util import timestamp, np_dict_to_list_dict
+from controller.util import timestamp, dict_np_array_to_json_array
 from controller.util.io import export_hdf5, export_mat
 
 
@@ -114,9 +114,20 @@ class MeasurementSweep(ABC):
     ):
         """Standard internal method to run a program sweep on a single device
         inside a 2D array of devices. This method used internally by array sweep
-        and single sweep. 
+        and single sweep. This feeds program built-in args and user program 
+        specific config args:
+
+        Built-in config args:
+        - `instr_b1500`: B1500 instrument object
+        - `monitor_channel`: EventChannel object for sending status updates
+        - `sweep_metadata`: Copy of sweep metadata dict
         """
-        result = program.run(instr_b1500=instr_b1500, **program_config)
+        result = program.run(
+            instr_b1500=instr_b1500,
+            monitor_channel=monitor_channel,
+            sweep_metadata=sweep_metadata,
+            **program_config,
+        )
         
         if save_data and os.path.exists(data_folder):
             path_dir = os.path.join(data_folder, save_dir)
@@ -135,7 +146,7 @@ class MeasurementSweep(ABC):
                     "program": program.name,
                     "config": sweep_metadata,
                 },
-                "data": np_dict_to_list_dict(result), # converts np ndarrays to regular lists
+                "data": dict_np_array_to_json_array(result), # converts np ndarrays to regular lists
             })
 
     @staticmethod
