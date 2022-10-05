@@ -861,6 +861,7 @@ class ControllerApiHandler(Resource):
             self.channel.publish({
                 "msg": "measurement_program_config",
                 "data": {
+                    "name": program,
                     "index": index,
                     "config": config,
                 },
@@ -877,6 +878,7 @@ class ControllerApiHandler(Resource):
             self.channel.publish({
                 "msg": "measurement_sweep_config",
                 "data": {
+                    "name": sweep,
                     "config": config,
                 },
             })

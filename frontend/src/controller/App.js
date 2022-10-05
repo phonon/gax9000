@@ -64,11 +64,13 @@ function App({
     // program settings
     const [measurementProgramList, setMeasurementProgramList] = useState([]);
     const [measurementPrograms, setMeasurementPrograms] = useState([""]);
+    const [measurementConfigsNames, setMeasurementConfigsNames] = useState([""]); // program name for each config, == programs, but set by backend response
     const [measurementConfigs, setMeasurementConfigs] = useState(["{}"]);
 
     // sweep settings
     const [sweepList, setSweepList] = useState([]);
     const [sweep, setSweep] = useState("");
+    const [sweepConfigName, setSweepConfigName] = useState(""); // name of the config for the sweep, == sweep but set by backend response
     const [sweepConfig, setSweepConfig] = useState("{}");
     const [sweepSaveData, setSweepSaveData] = useState(true);
     const [sweepSaveImage, setSweepSaveImage] = useState(true);
@@ -105,6 +107,13 @@ function App({
         newPrograms[index] = value;
         console.log(index, value, newPrograms);
         setMeasurementPrograms(newPrograms);
+    };
+
+    // Set measurement config at index in configs
+    const setMeasurementConfigNameAtIndex = (index, value) => {
+        const newNames = [...measurementConfigsNames];
+        newNames[index] = value;
+        setMeasurementConfigsNames(newNames);
     };
 
     // Set measurement config at index in configs
@@ -199,11 +208,13 @@ function App({
             setDeviceCol(settings.device_col);
             setDataFolder(settings.data_folder);
         });
-        responseHandlers.set("measurement_program_config", ({index, config}) => {
+        responseHandlers.set("measurement_program_config", ({name, index, config}) => {
             setMeasurementConfigAtIndex(index, JSON.stringify(config, null, 2));
+            setMeasurementConfigNameAtIndex(index, name);
         });
-        responseHandlers.set("measurement_sweep_config", ({config}) => {
+        responseHandlers.set("measurement_sweep_config", ({name, config}) => {
             setSweepConfig(JSON.stringify(config, null, 2));
+            setSweepConfigName(name); // set name forces code editor to re-render
         });
         responseHandlers.set("measurement_error", ({error}) => {
             console.error("Measurement failed error", error);
@@ -338,11 +349,13 @@ function App({
                         programList={measurementProgramList}
                         programs={measurementPrograms}
                         setProgramAtIndex={setMeasurementProgramAtIndex}
+                        programConfigsNames={measurementConfigsNames}
                         programConfigs={measurementConfigs}
                         setProgramConfigAtIndex={setMeasurementConfigAtIndex}
                         sweepList={sweepList}
                         sweep={sweep}
                         setSweepLocal={setSweep}
+                        sweepConfigName={sweepConfigName}
                         sweepConfig={sweepConfig}
                         setSweepConfigLocal={setSweepConfig}
                         sweepSaveData={sweepSaveData}

@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import CodeMirror from  "@uiw/react-codemirror";
 import { json as codeMirrorJsonExtension } from "@codemirror/lang-json";
+import { useEffect } from "react";
 
 
 const handleSetUserProfile = (axios, username, setUserLocal) => {
@@ -125,6 +126,45 @@ const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, new
 };
 
 /**
+ * CodeMirror code editor with synchronized local value. This is to
+ * deal with issue of cursor jumping to beginning when typing too fast
+ * due to element being re-rendered.
+ * 
+ * But because code mirror updated locally, we need another variable
+ * to synchronize when program or config changes. This is the `config`
+ * value which can be the selection title or list index. When this 
+ * changes, then push external value into local value.
+ */
+const SynchronizedCodeMirrorEditor = ({
+    config,   // selected program or config, for detecting when to update local value
+    value,    // external value
+    onChange,
+}) => {
+    const [localVal, setLocalVal] = React.useState(value);
+    
+    useEffect(() => {
+        setLocalVal(value);
+    }, [config]);
+
+    return <CodeMirror
+        value={localVal}
+        theme="light"
+        height="200px"
+        minHeight="160px"
+        extensions={[
+            codeMirrorJsonExtension(),
+        ]}
+        onChange={(newValue, viewUpdate) => {
+            // make update synchronous, to avoid cursor jumping when the value
+            // doesn't change asynchronously 
+            setLocalVal(newValue);
+            // make the real update afterwards
+            onChange(newValue);
+        }}
+    />
+}
+
+/**
  * Measurement controls ui
  */
 export const MeasurementControls = ({
@@ -139,11 +179,13 @@ export const MeasurementControls = ({
     programList,
     programs,
     setProgramAtIndex,
+    programConfigsNames,
     programConfigs,
     setProgramConfigAtIndex,
     sweepList,
     sweep,
     setSweepLocal,
+    sweepConfigName,
     sweepConfig,
     setSweepConfigLocal,
     sweepSaveData,
@@ -289,7 +331,7 @@ export const MeasurementControls = ({
                                             </Button>
                                         </Grid>
                                     </Grid>
-                                    <CodeMirror
+                                    {/* <CodeMirror
                                         value={programConfigs[index]}
                                         theme="light"
                                         height="200px"
@@ -300,6 +342,11 @@ export const MeasurementControls = ({
                                         onChange={(value, viewUpdate) => {
                                             setProgramConfigAtIndex(index, value);
                                         }}
+                                    /> */}
+                                    <SynchronizedCodeMirrorEditor
+                                        config={programConfigsNames[index]}
+                                        value={programConfigs[index]}
+                                        onChange={(val) => setProgramConfigAtIndex(index, val)}
                                     />
                                 </Box>
                             )}
@@ -331,7 +378,7 @@ export const MeasurementControls = ({
                                         )}
                                     </Select>
                                 </FormControl>
-                                <CodeMirror
+                                {/* <CodeMirror
                                     value={sweepConfig}
                                     theme="light"
                                     height="200px"
@@ -342,6 +389,11 @@ export const MeasurementControls = ({
                                     onChange={(value, viewUpdate) => {
                                         setSweepConfigLocal(value);
                                     }}
+                                /> */}
+                                <SynchronizedCodeMirrorEditor
+                                    config={sweepConfigName}
+                                    value={sweepConfig}
+                                    onChange={(val) => setSweepConfigLocal(val)}
                                 />
                                 
                                 {/* Start measurement button and save data configs */}
