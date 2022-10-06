@@ -83,13 +83,14 @@ class SweepArray(MeasurementSweep):
                 logging.info(f"[row={row}, col={col}] Running {pr.name}...")
                 MeasurementSweep.run_single(
                     instr_b1500=instr_b1500,
+                    monitor_channel=monitor_channel,
+                    signal_cancel=signal_cancel,
+                    sweep_metadata=sweep_metadata,
                     data_folder=data_folder,
                     save_dir=save_dir,
                     save_data=sweep_save_data,
-                    sweep_metadata=sweep_metadata,
                     program=pr,
                     program_config=pr_config,
-                    monitor_channel=monitor_channel,
                 )
 
                 # yields thread for other tasks (so data gets pushed)

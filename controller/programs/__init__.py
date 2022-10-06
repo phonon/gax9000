@@ -14,6 +14,25 @@ MEASUREMENT_PROGRAMS = [
     "keysight_rram_1t1r",
 ]
 
+class MeasurementResult():
+    """Wrapper for measurement result data and status flags."""
+    def __init__(
+        self,
+        cancelled,
+        data,
+        save_data=None,
+    ):
+        self.cancelled = cancelled
+        
+        # by default, only save data if not cancelled
+        # in some cases measurement program may want to override
+        if save_data is not None:
+            self.save_data = save_data
+        else:
+            self.save_data = not cancelled
+        
+        self.data = data
+
 class MeasurementProgram(ABC):
     """Interface for measurement programs."""
     
@@ -28,10 +47,19 @@ class MeasurementProgram(ABC):
 
     @staticmethod
     @abstractmethod
-    def run(**kwargs) -> dict:
-        """Run the program and returns dict with result data.
-        The result data is program specific and must be manually
-        parsed by caller for different programs."""
+    def run(**kwargs) -> MeasurementResult:
+        """Run the program and returns MeasurementResult object with result
+        data and measurement status flags. The result data is program
+        specific and must be manually parsed by caller for different
+        programs.
+        
+        The controller will inject built-in arguments that any program
+        can optionally use:
+        - `instr_b1500`: B1500 pyvisa instrument object
+        - `monitor_channel`: EventChannel object for sending status updates
+        - `signal_cancel`: SignalCancelTask object for checking for user cancel signal
+        - `sweep_metadata`: Copy of sweep metadata dict
+        """
         pass
     
     @staticmethod

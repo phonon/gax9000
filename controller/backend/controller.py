@@ -16,6 +16,8 @@ from flask_restful import Api, Resource, reqparse
 from controller.sse import EventChannel
 from controller.programs import MEASUREMENT_PROGRAMS, MeasurementProgram
 from controller.sweeps import MEASUREMENT_SWEEPS, MeasurementSweep
+from controller.util import SignalCancelTask
+
 
 class UserGlobalSettings():
     """Saved user global config settings."""
@@ -185,28 +187,6 @@ class ControllerSettings():
             smu_slots={},
         )
 
-class SignalCancelTask():
-    """Object to signal cancelling the current running task."""
-    def __init__(self):
-        self.cancelled = False
-        self.lock = BoundedSemaphore(value=1)
-    
-    def cancel(self, blocking=True):
-        if self.lock.acquire(blocking=blocking, timeout=None):
-            self.cancelled = True
-            self.lock.release()
-        
-    def reset(self, blocking=True):
-        if self.lock.acquire(blocking=blocking, timeout=None):
-            self.cancelled = False
-            self.lock.release()
-
-    def is_cancelled(self, blocking=True):
-        result = False
-        if self.lock.acquire(blocking=blocking, timeout=None):
-            result = self.cancelled
-            self.lock.release()
-        return result
     
 class Controller():
     def __init__(

@@ -7,7 +7,7 @@ import os
 from abc import ABC, abstractmethod
 from controller.programs import MeasurementProgram
 from controller.sse import EventChannel
-from controller.util import timestamp, dict_np_array_to_json_array
+from controller.util import timestamp, dict_np_array_to_json_array, SignalCancelTask
 from controller.util.io import export_hdf5, export_mat
 
 
@@ -104,13 +104,14 @@ class MeasurementSweep(ABC):
     @staticmethod
     def run_single(
         instr_b1500,
+        monitor_channel: EventChannel,
+        signal_cancel: SignalCancelTask,
+        sweep_metadata: dict,
         data_folder: str,
         save_dir: str,
         save_data: bool,
-        sweep_metadata: dict,
         program: MeasurementProgram,
         program_config: dict,
-        monitor_channel: EventChannel,
     ):
         """Standard internal method to run a program sweep on a single device
         inside a 2D array of devices. This method used internally by array sweep
@@ -120,24 +121,26 @@ class MeasurementSweep(ABC):
         Built-in config args:
         - `instr_b1500`: B1500 instrument object
         - `monitor_channel`: EventChannel object for sending status updates
+        - `signal_cancel`: SignalCancelTask object for checking for user cancel signal
         - `sweep_metadata`: Copy of sweep metadata dict
         """
         result = program.run(
             instr_b1500=instr_b1500,
             monitor_channel=monitor_channel,
+            signal_cancel=signal_cancel,
             sweep_metadata=sweep_metadata,
             **program_config,
         )
         
-        if save_data and os.path.exists(data_folder):
+        if save_data and result.save_data and os.path.exists(data_folder):
             path_dir = os.path.join(data_folder, save_dir)
             os.makedirs(path_dir, exist_ok=True)
 
             path_result_h5 = os.path.join(path_dir, f"{program.name}.h5")
             path_result_mat = os.path.join(path_dir, f"{program.name}.mat")
             
-            export_hdf5(path_result_h5, result)
-            export_mat(path_result_mat, result)
+            export_hdf5(path_result_h5, result.data)
+            export_mat(path_result_mat, result.data)
         
         # broadcast metadata and data
         if monitor_channel is not None:
@@ -146,7 +149,7 @@ class MeasurementSweep(ABC):
                     "program": program.name,
                     "config": sweep_metadata,
                 },
-                "data": dict_np_array_to_json_array(result), # converts np ndarrays to regular lists
+                "data": dict_np_array_to_json_array(result.data), # converts np ndarrays to regular lists
             })
 
     @staticmethod

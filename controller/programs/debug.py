@@ -1,9 +1,27 @@
 import gevent
+import logging
 import time
 import numpy as np
 from controller.sse import EventChannel
-from controller.programs import MeasurementProgram
-from controller.util import into_sweep_range, dict_np_array_to_json_array
+from controller.programs import MeasurementProgram, MeasurementResult
+from controller.util import into_sweep_range, dict_np_array_to_json_array, exp_moving_avg_with_init
+
+
+def start_measurement() -> float:
+    """Simulate starting measurement, returns starting timestamp"""
+    return time.time()
+
+def finish_measurement(t_start: float, t_measure: float) -> float:
+    """Simulate blocking wait for measurement results. This is equivalent to
+    trying to read data from GPIB query in pyvisa.
+    This will simulate halting with a full python time.sleep until the
+    measurement has "completed".
+    Returns timestamp when measurement "completed".
+    """
+    dt_remaining = t_measure - (time.time() - t_start)
+    if dt_remaining > 0:
+        time.sleep(dt_remaining)
+    return time.time()
 
 
 class ProgramDebug(MeasurementProgram):
@@ -23,7 +41,7 @@ class ProgramDebug(MeasurementProgram):
         **kwargs
     ) -> dict:
         """Run the program."""
-        print("RUNNING DEBUG PROGRAM")
+        logging.info("RUNNING DEBUG PROGRAM")
 
         # simulate running
         gevent.sleep(2)
@@ -54,13 +72,16 @@ class ProgramDebug(MeasurementProgram):
                 i_s_out[b, d, :] = -1e-6 -1e-6 * (np.abs(v_gs_arr) + float(d)*0.25) * float(b+1)
                 i_g_out[b, d, :] = 1e-9 + 1e-9 * np.abs(v_gs_arr) * float(b+1)
 
-        return {
-            "v_ds": v_ds_out,
-            "v_gs": v_gs_out,
-            "i_d": i_d_out,
-            "i_s": i_s_out,
-            "i_g": i_g_out,
-        }
+        return MeasurementResult(
+            cancelled=False,
+            data={
+                "v_ds": v_ds_out,
+                "v_gs": v_gs_out,
+                "i_d": i_d_out,
+                "i_s": i_s_out,
+                "i_g": i_g_out,
+            },
+        )
 
 
 class ProgramDebugMultistep(MeasurementProgram):
@@ -79,16 +100,18 @@ class ProgramDebugMultistep(MeasurementProgram):
     
     def run(
         monitor_channel: EventChannel = None,
+        signal_cancel = None,
         sweep_metadata: dict = {},
         v_gs=[0, 1, 2, 3, 4, 5, 6, 7],
         v_ds=[0.5, 1.0, 4.0],
         delay=4,
+        yield_during_measurement=True,
         **kwargs
     ) -> dict:
         """Run the program."""
         
-        print(f"[ProgramDebugMultistep] START")
-        
+        logging.info(f"[ProgramDebugMultistep] START")
+
         # convert v_gs and v_ds into numpy arrays
         v_gs_sweep = into_sweep_range(v_gs)
         v_ds_sweep = into_sweep_range(v_ds)
@@ -106,13 +129,33 @@ class ProgramDebugMultistep(MeasurementProgram):
         i_d_out = np.full(data_shape, np.nan)
         i_s_out = np.full(data_shape, np.nan)
         i_g_out = np.full(data_shape, np.nan)
-        
+
+        # sweep state
+        t_run_avg = None  # avg program step time
+        cancelled = False # flag for program cancelled before done
+
         for b in range(num_bias):
 
-            print(f"[ProgramDebugMultistep] STEP {b+1}/{num_bias} (v_ds = {v_ds_sweep[b]} V)")
+            logging.info(f"[ProgramDebugMultistep] STEP {b+1}/{num_bias} (v_ds = {v_ds_sweep[b]} V)")
+            
+            # simulate running measurement and a blocking read query
+            t_start = start_measurement()
 
-            # simulate running
-            gevent.sleep(delay)
+            # here we yield the green thread during measurement to let other tasks run
+            # we estimate the avg time remaining for the measurement, with some margin
+            # so we don't oversleep.
+            if yield_during_measurement and t_run_avg is not None and t_run_avg > 0:
+                t_sleep = 0.9 * t_run_avg
+                logging.info(f"[ProgramDebugMultistep] SLEEPING: gevent.sleep({t_sleep:.3f})")
+                gevent.sleep(t_sleep)
+
+            t_finish = finish_measurement(t_start, delay) # blocks all threads until delay passes from t_start
+
+            # update avg measurement time for accurate gevent sleep
+            t_run = t_finish - t_start
+            t_run_avg = max(0, exp_moving_avg_with_init(t_run_avg, t_run, alpha=0.2, init_alpha=0.9))
+            
+            logging.info(f"[ProgramDebugMultistep] MEASUREMENT FINISHED: t={t_run:.3f}s, t_avg={t_run_avg:.3f}s")
 
             for d in range(num_sweeps):
                 v_ds_out[b, d, :] = v_ds_sweep[b]
@@ -143,12 +186,22 @@ class ProgramDebugMultistep(MeasurementProgram):
             if monitor_channel is not None and b < num_bias-1: # don't publish last step
                 gevent.spawn(task_update_program_status)
             
-        print(f"[ProgramDebugMultistep] FINISHED")
+            if signal_cancel is not None:
+                logging.info(f"[ProgramDebugMultistep] CANCEL STATUS: {signal_cancel}")
+                if signal_cancel.is_cancelled():
+                    logging.info(f"[ProgramDebugMultistep] CANCELLING PROGRAM")
+                    cancelled = True
+                    break
+            
+        logging.info(f"[ProgramDebugMultistep] FINISHED")
 
-        return {
-            "v_ds": v_ds_out,
-            "v_gs": v_gs_out,
-            "i_d": i_d_out,
-            "i_s": i_s_out,
-            "i_g": i_g_out,
-        }
+        return MeasurementResult(
+            cancelled=cancelled,
+            data={
+                "v_ds": v_ds_out,
+                "v_gs": v_gs_out,
+                "i_d": i_d_out,
+                "i_s": i_s_out,
+                "i_g": i_g_out,
+            },
+        )

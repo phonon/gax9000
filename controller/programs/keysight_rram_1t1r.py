@@ -6,7 +6,7 @@ import gevent
 import pyvisa
 import logging
 from tabulate import tabulate
-from controller.programs import MeasurementProgram, SweepType
+from controller.programs import MeasurementProgram, MeasurementResult, SweepType
 from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks, map_smu_to_slot
 
 
@@ -414,6 +414,11 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         # ===========================================================
         # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
         # ===========================================================
+
+        # sweep state
+        t_run_avg = None  # avg program step time
+        cancelled = False # flag for program cancelled before done
+
         for i, sweep in enumerate(bias_configs):
             # unpack sweep config
             v_g = sweep.v_g
@@ -535,7 +540,10 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         for k, v in data_set.items():
             data_dict[f"set_{k}"] = v
 
-        return data_dict
+        return MeasurementResult(
+            cancelled=cancelled,
+            data=data_dict,
+        )
 
 
 if __name__ == "__main__":

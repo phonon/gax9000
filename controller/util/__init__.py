@@ -3,7 +3,7 @@ Miscellaneous utils here
 """
 import datetime
 from multiprocessing.sharedctypes import Value
-
+from gevent.lock import BoundedSemaphore
 from numpy import Infinity
 
 def iter_chunks(lst, size):
@@ -98,3 +98,40 @@ def map_smu_to_slot(
         return smu_slots[str(smu)]
     else:
         return smu
+
+def exp_moving_avg_with_init(x_avg, x, alpha=0.2, init_alpha=0.8):
+    """Exponential moving average, with initialization alpha if `x_avg` is None"""
+    if x_avg is None:
+        return x * init_alpha
+    else:
+        return alpha * x + (1 - alpha) * x_avg
+
+
+class SignalCancelTask():
+    """Object to signal cancelling the current running task."""
+    def __init__(self):
+        self.cancelled = False
+        self.lock = BoundedSemaphore(value=1)
+    
+    def __repr__(self) -> str:
+        return f"SignalCancelTask(cancelled={self.cancelled})"
+    
+    def __str__(self) -> str:
+        return self.__repr__()
+    
+    def cancel(self, blocking=True):
+        if self.lock.acquire(blocking=blocking, timeout=None):
+            self.cancelled = True
+            self.lock.release()
+        
+    def reset(self, blocking=True):
+        if self.lock.acquire(blocking=blocking, timeout=None):
+            self.cancelled = False
+            self.lock.release()
+
+    def is_cancelled(self, blocking=True):
+        result = False
+        if self.lock.acquire(blocking=blocking, timeout=None):
+            result = self.cancelled
+            self.lock.release()
+        return result

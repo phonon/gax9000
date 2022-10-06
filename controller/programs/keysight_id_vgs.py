@@ -7,7 +7,7 @@ import gevent
 import pyvisa
 import logging
 from tabulate import tabulate
-from controller.programs import MeasurementProgram, SweepType
+from controller.programs import MeasurementProgram, MeasurementResult, SweepType
 from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks, map_smu_to_slot
 
 
@@ -303,6 +303,11 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # ===========================================================
         # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
         # ===========================================================
+
+        # sweep state
+        t_run_avg = None  # avg program step time
+        cancelled = False # flag for program cancelled before done
+
         for idx_bias, v_ds_val in enumerate(v_ds_range):
             # round to mV
             v_ds_val = round(v_ds_val, 3)
@@ -402,16 +407,19 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             i_d_out = -i_d_out
             i_s_out = -i_s_out
 
-        return {
-            "v_ds": v_ds_out,
-            "v_gs": v_gs_out,
-            "i_d": i_d_out,
-            "i_s": i_s_out,
-            "i_g": i_g_out,
-            "time_i_d": time_i_d_out,
-            "time_i_s": time_i_s_out,
-            "time_i_g": time_i_g_out,
-        }
+        return MeasurementResult(
+            cancelled=cancelled,
+            data={
+                "v_ds": v_ds_out,
+                "v_gs": v_gs_out,
+                "i_d": i_d_out,
+                "i_s": i_s_out,
+                "i_g": i_g_out,
+                "time_i_d": time_i_d_out,
+                "time_i_s": time_i_s_out,
+                "time_i_g": time_i_g_out,
+            },
+        )
 
 
 
