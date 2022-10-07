@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ProgramDebug, ProgramIdVds, ProgramIdVgs, ProgramUnknown } from "./program.js";
+import { ProgramDebug, ProgramIdVds, ProgramIdVgs, ProgramRram1T1R, ProgramUnknown } from "./program.js";
 
 
 const Monitor = () => {
@@ -12,6 +12,9 @@ const Monitor = () => {
     renderPrograms.set("debug_multistep", ProgramDebug);
     renderPrograms.set("keysight_id_vds", ProgramIdVds);
     renderPrograms.set("keysight_id_vgs", ProgramIdVgs);
+    renderPrograms.set("keysight_rram_1t1r", ProgramRram1T1R);
+    renderPrograms.set("keysight_rram_1t1r_sweep", ProgramRram1T1R);
+    renderPrograms.set("keysight_rram_1t1r_sequence", ProgramRram1T1R);
 
     useEffect(() => {
         var eventSrc = new EventSource("https://localhost:9000/subscribe");

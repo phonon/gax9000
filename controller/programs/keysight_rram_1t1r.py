@@ -137,6 +137,19 @@ def sweep_sequence_data_block(
     }
 
 
+def calculate_derived_measurement_values(
+    data_measurement,
+) -> dict:
+    """
+    Add any standard derived measurement values to the post-measured data.
+    Things like resistance = v/i.
+    """
+    # add channel resistance = v_d / i_d
+    data_measurement["res"] = np.abs(data_measurement["v_d"] / data_measurement["i_d"])
+
+    return data_measurement
+
+
 def _query_error(instr_b1500, stop_on_error=True):
     """Internal shared function for querying error status from Keysight B1500."""
     res = instr_b1500.query("ERRX?")
@@ -476,6 +489,10 @@ def run_rram_1t1r_sweeps(
             cancelled = True
             break
     
+    # add derived measurement data
+    # e.g. channel resistance
+    data_measurement = calculate_derived_measurement_values(data_measurement)
+
     return data_measurement, cancelled
 
 
@@ -648,7 +665,8 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
         # additional program specific data
         data_measurement["sequence"] = sequence
-        # add sequence of npoints for each step
+        # add sequence names and npoints for each step
+        data_measurement["step_names"] = [ x.name for x in bias_configs ]
         data_measurement["num_points"] = [ x.num_points for x in bias_configs ]
 
         # measurement compliance settings
@@ -882,7 +900,8 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         # additional program specific data
         data_measurement["v_d_sweep"] = v_d_sweep
         data_measurement["v_g_sweep"] = v_g_sweep
-        # add sequence of npoints for each step
+        # add sequence names and npoints for each step
+        data_measurement["step_names"] = [ x.name for x in bias_configs ]
         data_measurement["num_points"] = [ x.num_points for x in bias_configs ]
 
         # measurement compliance settings
@@ -1122,6 +1141,7 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         )
         num_sequences = len(bias_configs)
         num_points_sequence = [ x.num_points for x in bias_configs ]
+        step_names = [ x.name for x in bias_configs ]
 
         # measurement compliance settings
         v_d_max = 0
@@ -1151,7 +1171,8 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
             # create new data block for each reptition
             # common measurement data block format
             data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
-            # add sequence of npoints for each step
+            # add sequence names and npoints for each step
+            data_measurement["step_names"] = step_names
             data_measurement["num_points"] = num_points_sequence
             
             data_measurement, cancelled = run_rram_1t1r_sweeps(
@@ -1178,8 +1199,8 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
                 os.makedirs(path_dir, exist_ok=True)
 
                 program_name = ProgramKeysightRram1T1RSequence.name
-                path_result_h5 = os.path.join(path_dir, f"{program_name}_{step}.h5")
-                path_result_mat = os.path.join(path_dir, f"{program_name}_{step}.mat")
+                path_result_h5 = os.path.join(path_dir, f"{program_name}_{n}.h5")
+                path_result_mat = os.path.join(path_dir, f"{program_name}_{n}.mat")
                 
                 export_hdf5(path_result_h5, data_measurement)
                 export_mat(path_result_mat, data_measurement)

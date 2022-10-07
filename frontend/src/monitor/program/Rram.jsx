@@ -22,65 +22,97 @@ export const ProgramRram1T1R = ({
 
     const measurementConfigString = JSON.stringify(metadata.config, null, 2);
 
-    // get num points/bias points from data shape: (bias, sweeps, points)
-    const numBias = data.v_gs.length;
-    const numSweeps = data.v_gs[0].length;
-    const numPoints = data.v_gs[0][0].length;
+    // Rram measurement data format contains padded arrays:
+    // v_d sequences = 
+    //      FORM  [0,   1,   2,   3,   4]
+    //      RESET [0,  -1,  -2,  -3, nan]
+    //      SET   [0,   1,   2, nan, nan]
+    //      RESET [0,  -1,  -2,  -3, nan]
+    //      SET   [0,   1,   2, nan, nan]
+    //      RESET [0,  -1,  -2,  -3, nan]
+    // 
+    // Overall rram data block shape is:
+    //      (num_sequences, num_directions, num_points_max)
+    // for run-time updates, `num_sequences = metadata.step` which is number of
+    // steps that have completed. 
+    const numSequences = metadata.step !== undefined ? metadata.step : data.v_d.length;
+    const numDirections = data.v_d[0].length;
+    const numPointsMax = data.v_d[0][0].length;
 
-    console.log(`numBias=${numBias}, numSweeps=${numSweeps}, numPoints=${numPoints}`);
+    // this gives step name and num points for each sequence,
+    // e.g. numPoints[0] = number of points for measurement sequence 1
+    const sequenceNumPoints = data.num_points;
+    const sequenceStepNames = data.step_names;
 
-    const tracesIdVgs = [];
-    const tracesIgVgs = [];
+    console.log(`numSequences=${numSequences}, numDirections=${numDirections}, numPointsMax=${numPointsMax}`);
+
+    // plot traces
+    const tracesIdVd = [];  // id vs vd
+    const tracesResVd = []; // res vs vd, res = vd/id
+    const tracesIgVd = [];  // ig vs vd
 
     // key properties to display in data table
-    const vdsList = [];
+    const resList = [];   // resistance = abs(v_d / i_d) at end point of each sequence step
     const idMaxList = [];
     const idMinList = [];
-    const onOffList = [];
     const igMaxList = [];
 
-    for ( let b = 0; b < numBias; b++ ) {
+    for ( let s = 0; s < numSequences; s++ ) {
+        // number of points for this sequence
+        const n = sequenceNumPoints[s];
+
         // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
-        const colBase = colorTo255Range(colormap(b, -1, numBias));
+        const colBase = colorTo255Range(colormap(s, -1, numBias));
         
-        // add vds bias
-        vdsList.push(data.v_ds[b][0][0]);
+        // add vd bias
+        vdList.push(data.v_d[s][0][0]);
 
-        for ( let s = 0; s < numSweeps; s++ ) {
+        for ( let d = 0; d < numDirections; d++ ) {
             // make additional sweeps brighter for visibility
-            const col = colorBrighten(colBase, 0.6 + (s * 0.4));
+            const col = colorBrighten(colBase, 0.6 + (d * 0.4));
 
-            const vds = data.v_ds[b][s][0];
-            const vgs = data.v_gs[b][s];
-            const id = data.i_d[b][s];
-            const ig = data.i_g[b][s];
-            
+            // unpack data
+            const vs = data.v_s[s][d][0]; // const
+            const vd = data.v_d[s][d].slice(0, n);
+            const vg = data.v_g[s][d].slice(0, n);
+            const id = data.i_d[s][d].slice(0, n);
+            const ig = data.i_g[s][d].slice(0, n);
+            const res = data.res[s][d].slice(0, n);
+
             // key performance metrics (only do for first sweep):
             // find max/min id and max ig in range
-            if ( s === 0 ) {
+            if ( d === 0 ) {
                 const idMax = Math.max(...id);
                 const idMin = Math.min(...id);
                 const igMax = Math.max(...ig);
-                const onOff = idMax / idMin;
+                resList.push(res[n-1].toExponential(2));
                 idMaxList.push(idMax.toExponential(2));
                 idMinList.push(idMin.toExponential(2));
-                onOffList.push(onOff.toExponential(2));
                 igMaxList.push(igMax.toExponential(2));
             }
 
             // create plot traces
-            tracesIdVgs.push({
-                name: `Vds=${vds}, Dir=${s}`,
-                x: vgs,
+            tracesIdVd.push({
+                name: `${sequenceStepNames[s]}, dir=${d}`,
+                x: vd,
                 y: id,
                 type: "scatter",
                 mode: "lines+markers",
                 marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
             });
+
+            tracesResVd.push({
+                name: `${sequenceStepNames[s]}, dir=${d}`,
+                x: vd,
+                y: res,
+                type: "scatter",
+                mode: "lines+markers",
+                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+            });
             
-            tracesIgVgs.push({
-                name: `Vds=${vds}, Dir=${s}`,
-                x: vgs,
+            tracesIgVd.push({
+                name: `${sequenceStepNames[s]}, dir=${d}`,
+                x: vd,
                 y: ig,
                 type: "scatter",
                 mode: "lines+markers",
@@ -90,9 +122,9 @@ export const ProgramRram1T1R = ({
     }
 
     const tableRows = [
+        { name: "Res", values: resList },
         { name: "Id Max", values: idMaxList },
         { name: "Id Min", values: idMinList },
-        { name: "On/Off", values: onOffList },
         { name: "Ig Max", values: igMaxList },
     ]
 
@@ -117,9 +149,9 @@ export const ProgramRram1T1R = ({
                     <Table size="small" aria-label="metrics table">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Vds</TableCell>
-                                {vdsList.map((vds, i) =>
-                                    <TableCell key={i}>{vds}</TableCell>
+                                <TableCell>Step</TableCell>
+                                {sequenceStepNames.map((step, i) =>
+                                    <TableCell key={i}>{step}</TableCell>
                                 )}
                             </TableRow>
                         </TableHead>
@@ -164,11 +196,11 @@ export const ProgramRram1T1R = ({
                 height: "100%",
                 overflow: "scroll",
             }}>
-                {/* Id-Vgs log */}
+                {/* Id-Vd log */}
                 <Plot
-                    data={tracesIdVgs}
+                    data={tracesIdVd}
                     layout={ {
-                        title: "Id-Vgs (Log Scale)",
+                        title: "Id-Vd (Log Scale)",
                         width: 600,
                         height: 600,
                         xaxis: {
@@ -182,11 +214,11 @@ export const ProgramRram1T1R = ({
                     } }
                 />
 
-                {/* Id-Vgs linear */}
+                {/* Res-Vd log */}
                 <Plot
-                    data={tracesIdVgs}
+                    data={tracesResVd}
                     layout={ {
-                        title: "Id-Vgs (Linear Scale)",
+                        title: "R-Vd (Log Scale)",
                         width: 600,
                         height: 600,
                         xaxis: {
@@ -194,17 +226,17 @@ export const ProgramRram1T1R = ({
                             autorange: true,
                         },
                         yaxis: {
-                            type: "linear",
+                            type: "log",
                             autorange: true,
                         }
                     } }
                 />
 
-                {/* Ig-Vgs log */}
+                {/* Ig-Vd log */}
                 <Plot
-                    data={tracesIgVgs}
+                    data={tracesIgVd}
                     layout={ {
-                        title: "Ig-Vgs",
+                        title: "Ig-Vd (Log Scale)",
                         width: 600,
                         height: 600,
                         xaxis: {
