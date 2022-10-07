@@ -12,6 +12,8 @@ MEASUREMENT_PROGRAMS = [
     "keysight_id_vds",
     "keysight_id_vgs",
     "keysight_rram_1t1r",
+    "keysight_rram_1t1r_sweep",
+    "keysight_rram_1t1r_sequence",
 ]
 
 class MeasurementResult():
@@ -81,6 +83,12 @@ class MeasurementProgram(ABC):
         elif s == "keysight_rram_1t1r":
             from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1R
             return ProgramKeysightRram1T1R
+        elif s == "keysight_rram_1t1r_sweep":
+            from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1RSweep
+            return ProgramKeysightRram1T1RSweep
+        elif s == "keysight_rram_1t1r_sequence":
+            from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1RSequence
+            return ProgramKeysightRram1T1RSequence
         else:
             logging.error(f"Unknown program type: {name}")
             return None

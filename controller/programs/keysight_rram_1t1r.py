@@ -40,7 +40,7 @@ RESET use negative voltage on top):
                 _                        _
                 |                        |
             |---+                        X
-        Vg ---o|      (PMOS)                X  RRAM
+     Vg ---o|      (PMOS)                X  RRAM
     = -1 V  |---+                        X  (TE)
                 |                        |
                 |                        |
@@ -52,48 +52,52 @@ RESET use negative voltage on top):
                 BE = 0 V                 VS = 0 V
 """
 import traceback
-from dis import Instruction
 from multiprocessing.sharedctypes import Value
 import numpy as np
 import gevent
 import pyvisa
 import logging
+from time import time
 from tabulate import tabulate
 from controller.programs import MeasurementProgram, MeasurementResult, SweepType
 from controller.sse import EventChannel
-from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks, map_smu_to_slot
+from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks, map_smu_to_slot, dict_np_array_to_json_array, exp_moving_avg_with_init
+from controller.util.io import export_hdf5, export_mat
 
 
 class RramSweepConfig():
     """
     Common RRAM sweep bias configuration for all measurement programs.
     Contains:
-    - v_g: gate voltage (constant)
+    - v_sub: substrate voltage (constant)
     - v_s: source voltage (constant)
+    - v_g: gate voltage (constant)
     - v_d: drain voltage (sweep)
     """
     def __init__(
         self,
         name,
+        v_sub,
         v_s,
         v_g,
         v_d_sweep,
     ):
         self.name = name
+        self.v_sub = v_sub
         self.v_s = v_s
         self.v_g = v_g
         self.v_d_sweep = v_d_sweep
         self.num_points = len(v_d_sweep)
 
     def __repr__(self) -> str:
-        return f"RramSweepConfig(name='{self.name}', v_s={self.v_s}, v_g={self.v_g}, v_d_sweep={self.v_d_sweep})"
+        return f"RramSweepConfig(name='{self.name}', v_sub={self.v_sub}, v_s={self.v_s}, v_g={self.v_g}, v_d_sweep={self.v_d_sweep})"
 
 
 def sweep_sequence_data_block(
     num_sequences,
     num_points_max,
     num_directions=2, # forward/reverse
-):
+) -> dict:
     """
     Standard rram 1T1R measurement sequence sweep data block.
     Shared for all measurement programs.
@@ -118,7 +122,19 @@ def sweep_sequence_data_block(
         RESET [0,  -1,  -2,  -3, nan]
     ...
     """
-    return np.full((num_sequences, num_directions, num_points_max), np.nan)
+    data_shape = (num_sequences, num_directions, num_points_max)
+
+    return {
+        "v_s": np.full(data_shape, np.nan),
+        "v_d": np.full(data_shape, np.nan),
+        "v_g": np.full(data_shape, np.nan),
+        "i_s": np.full(data_shape, np.nan),
+        "i_d": np.full(data_shape, np.nan),
+        "i_g": np.full(data_shape, np.nan),
+        "time_i_s": np.full(data_shape, np.nan), # timestamps
+        "time_i_d": np.full(data_shape, np.nan),
+        "time_i_g": np.full(data_shape, np.nan),
+    }
 
 
 def _query_error(instr_b1500, stop_on_error=True):
@@ -300,6 +316,169 @@ def measurement_keysight_b1500_setup(
     query_error(instr_b1500)
 
 
+def run_rram_1t1r_sweeps(
+    program_name: str,
+    instr_b1500,
+    monitor_channel: EventChannel,
+    signal_cancel,
+    sweep_metadata,
+    query_error,
+    probe_gate: int,
+    probe_source: int,
+    probe_drain: int,
+    probe_sub: int,
+    id_compliance: float,           # drain current compliance
+    ig_compliance: float,           # gate current compliance
+    yield_during_measurement: bool, # yield greenlet thread during measurement
+    bias_configs: list,
+    data_measurement: dict,
+):
+    """Common core inner loop to run list of rram 1T1R bitline bias config
+    sweeps in keysight b1500. This is used by all rram 1T1R measurement
+    programs.
+    """
+    # derived parameters
+    num_sequences = len(bias_configs)
+
+    # internal sweep state
+    t_run_avg = None  # avg program step time
+    cancelled = False # flag for program cancelled before done
+
+    for step, sweep in enumerate(bias_configs):
+        # unpack sweep bias config
+        v_sub = sweep.v_sub
+        v_s = sweep.v_s
+        v_g = sweep.v_g
+        v_d_sweep = sweep.v_d_sweep
+        num_points = sweep.num_points
+        
+        # print(f"v_s = {v_s}")
+        # print(f"v_g = {v_g}")
+        # print(f"v_sweep = {v_sweep}")
+        # print(f"num_points = {num_points}")
+
+        print(f"============================================================")
+        print(f"Measuring step {step}: {sweep.name} @ v_d = {v_d_sweep[-1]}")
+        print(f"------------------------------------------------------------")
+        
+        # write voltage staircase waveform
+        wv_range_mode = 0 # AUTO
+        wv_cmd = SweepType.FORWARD_REVERSE.b1500_wv_sweep_command(
+            ch=probe_drain,
+            range=wv_range_mode,
+            start=v_d_sweep[0],
+            stop=v_d_sweep[-1],
+            steps=num_points,
+            icomp=id_compliance,
+            pcomp=None, # ignore for now
+        )
+        # print(wv_cmd)
+        instr_b1500.write(wv_cmd)
+        query_error(instr_b1500)
+        
+        # write bulk bias
+        instr_b1500.write(f"DV {probe_sub},0,{v_sub},{id_compliance}")
+        query_error(instr_b1500)
+        
+        # write source bias
+        instr_b1500.write(f"DV {probe_source},0,{v_s},{id_compliance}")
+        query_error(instr_b1500)
+
+        # write gate bias
+        instr_b1500.write(f"DV {probe_gate},0,{v_g},{ig_compliance}")
+        query_error(instr_b1500)
+
+        # execute and wait for data response
+        instr_b1500.write("XE")
+        
+        # simulate running measurement and a blocking read query
+        t_start = time()
+
+        # yield green thread during measurement to let other tasks run
+        if yield_during_measurement and t_run_avg is not None and t_run_avg > 0:
+            t_sleep = 0.9 * t_run_avg
+            logging.info(f"[ProgramKeysightRram1T1R] SLEEPING: gevent.sleep({t_sleep:.3f})")
+            gevent.sleep(t_sleep)
+
+        # set timeout (milliseconds)
+        instr_b1500.timeout = 60 * 1000
+        _opc = instr_b1500.query("*OPC?")
+        instr_b1500.timeout = 10 * 1000
+        query_error(instr_b1500)
+
+        # update avg measurement time for accurate gevent sleep
+        t_finish = time()
+        t_run = t_finish - t_start
+        t_run_avg = max(0, exp_moving_avg_with_init(t_run_avg, t_run, alpha=0.2, init_alpha=0.9))
+
+        # zero probes after measurement
+        instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
+        instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
+        instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
+        instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
+        query_error(instr_b1500)
+        
+        # number of bytes in output data buffer
+        nbytes = int(instr_b1500.query("NUB?"))
+        print(f"nbytes={nbytes}")
+        buf = instr_b1500.read()
+        # print(buf)
+
+        # parse vals strings into numbers
+        vals = buf.strip().split(",")
+        vals = parse_keysight_str_values(vals)
+
+        # values chunked for each measurement point:
+        #   [ [vd0, id0, ig0] , [vgs1, id1, ig1], ... ]
+        val_chunks = [ x for x in iter_chunks(vals, 7) ]
+
+        # split val chunks into forward/reverse sweep components:
+        sweep_chunks = [val_chunks[0:num_points], val_chunks[num_points:]]
+
+        # values to print out to console for display
+        val_table = []
+
+        for s, sweep_vals in enumerate(sweep_chunks):
+            for i, vals_chunk in enumerate(sweep_vals):
+                val_table.append([v_g, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
+                
+                data_measurement["v_s"][step, s, i] = v_s
+                data_measurement["v_g"][step, s, i] = v_g
+                data_measurement["v_d"][step, s, i] = vals_chunk[6]
+                data_measurement["i_d"][step, s, i] = vals_chunk[1]
+                data_measurement["i_s"][step, s, i] = vals_chunk[3]
+                data_measurement["i_g"][step, s, i] = vals_chunk[5]
+                # timestamps
+                data_measurement["time_i_d"][step, s, i] = vals_chunk[0]
+                data_measurement["time_i_s"][step, s, i] = vals_chunk[2]
+                data_measurement["time_i_g"][step, s, i] = vals_chunk[4]
+        
+        print(tabulate(val_table, headers=["v_g [V]", "v_d [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
+
+        print("============================================================")
+        
+        if monitor_channel is not None and step < num_sequences-1: # don't publish last step
+            def task_update_program_status():
+                """Update program status."""
+                monitor_channel.publish({
+                    "metadata": {
+                        "program": program_name,
+                        "config": sweep_metadata,
+                        "step": step,
+                        "step_total": num_sequences,
+                    },
+                    "data": dict_np_array_to_json_array(data_measurement), # converts np ndarrays to regular lists
+                })
+            gevent.spawn(task_update_program_status)
+        
+        if signal_cancel is not None and signal_cancel.is_cancelled():
+            logging.info(f"[ProgramKeysightRram1T1R] CANCELLING PROGRAM")
+            cancelled = True
+            break
+    
+    return data_measurement, cancelled
+
+
 class ProgramKeysightRram1T1R(MeasurementProgram):
     """Implement most basic 1T1R single-bit form/reset/set sweeps.  
 
@@ -326,6 +505,7 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
     @staticmethod
     def parse_sweep_sequence(
         sequence,
+        v_sub,
         v_s,
         v_g_form,
         v_d_form_range,
@@ -344,11 +524,11 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         for i in range(len(sequence)):
             pattern = sequence[i]
             if pattern == "f": # form
-                bias_configs.append(RramSweepConfig(name="form", v_s=v_s, v_g=v_g_form, v_d_sweep=v_d_form_range))
+                bias_configs.append(RramSweepConfig(name="form", v_sub=v_sub, v_s=v_s, v_g=v_g_form, v_d_sweep=v_d_form_range))
             elif pattern == "s": # set
-                bias_configs.append(RramSweepConfig(name="set", v_s=v_s, v_g=v_g_set, v_d_sweep=v_d_set_range))
+                bias_configs.append(RramSweepConfig(name="set", v_sub=v_sub, v_s=v_s, v_g=v_g_set, v_d_sweep=v_d_set_range))
             elif pattern == "r": # reset
-                bias_configs.append(RramSweepConfig(name="reset", v_s=v_s, v_g=v_g_reset, v_d_sweep=v_d_reset_range))
+                bias_configs.append(RramSweepConfig(name="reset", v_sub=v_sub, v_s=v_s, v_g=v_g_reset, v_d_sweep=v_d_reset_range))
             else:
                 raise ValueError(f"Invalid sweep pattern: {pattern}")
 
@@ -380,6 +560,7 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         instr_b1500=None,
         monitor_channel: EventChannel = None,
         signal_cancel = None,
+        sweep_metadata: dict = {},
         probe_gate=1,
         probe_source=4,
         probe_drain=8,
@@ -393,11 +574,12 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         v_d_set=2.0,              # set drain voltage sweep
         v_g_set=1.0,              # set gate voltage (fixed)
         v_step=0.1,               # voltage step for drain sweeps
-        i_compliance_form=1e-3,   # ideally compliance should never hit (transistor should prevent)
-        i_compliance_set=1e-3,
-        i_compliance_reset=1e-3,
+        i_compliance_form=10e-3,  # ideally compliance should never hit (transistor should prevent)
+        i_compliance_set=10e-3,
+        i_compliance_reset=10e-3,
         sequence="frs",
         stop_on_error=True,
+        yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
     ) -> MeasurementResult:
         """Run the program."""
@@ -452,6 +634,7 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         num_sequences = len(sequence)
         bias_configs = ProgramKeysightRram1T1R.parse_sweep_sequence(
             sequence=sequence,
+            v_sub=v_sub,
             v_s=v_s,
             v_g_form=v_g_form,
             v_d_form_range=v_d_form_range,
@@ -461,23 +644,16 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
             v_d_reset_range=v_d_reset_range,
         )
         
-        # create separate dict data banks for form, set, and reset sweeps
-        data_measurement = {
-            "sequence": sequence,
-            "v_s": sweep_sequence_data_block(num_sequences, num_points_max),
-            "v_d": sweep_sequence_data_block(num_sequences, num_points_max),
-            "v_g": sweep_sequence_data_block(num_sequences, num_points_max),
-            "i_s": sweep_sequence_data_block(num_sequences, num_points_max),
-            "i_d": sweep_sequence_data_block(num_sequences, num_points_max),
-            "i_g": sweep_sequence_data_block(num_sequences, num_points_max),
-            "time_i_s": sweep_sequence_data_block(num_sequences, num_points_max), # timestamps
-            "time_i_d": sweep_sequence_data_block(num_sequences, num_points_max),
-            "time_i_g": sweep_sequence_data_block(num_sequences, num_points_max),
-        }
+        # common measurement data block format
+        data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
+        # additional program specific data
+        data_measurement["sequence"] = sequence
+        # add sequence of npoints for each step
+        data_measurement["num_points"] = [ x.num_points for x in bias_configs ]
 
         # measurement compliance settings
-        id_compliance = 0.100 # 100 mA complience
-        ig_compliance = 0.010 # 10 mA complience
+        id_compliance = 0.010 # 10 mA complience
+        ig_compliance = 0.001 # 1 mA complience
         pow_compliance = abs(id_compliance * np.max(v_d_form_range)) # power compliance [W]
 
         # reset instrument
@@ -496,112 +672,24 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
             pow_compliance=pow_compliance,
         )
 
-        # ===========================================================
-        # PERFORM SWEEP FOR EACH VDS AND SWEEP DIRECTION
-        # ===========================================================
-
-        # sweep state
-        t_run_avg = None  # avg program step time
-        cancelled = False # flag for program cancelled before done
-
-        for step, sweep in enumerate(bias_configs):
-            # unpack sweep config
-            v_s = sweep.v_s
-            v_g = sweep.v_g
-            v_d_sweep = sweep.v_d_sweep
-            num_points = sweep.num_points
-            
-            # print(f"v_s = {v_s}")
-            # print(f"v_g = {v_g}")
-            # print(f"v_sweep = {v_sweep}")
-            # print(f"num_points = {num_points}")
-
-            print(f"============================================================")
-            print(f"Measuring step {step}: {sweep.name} @ V = {v_d_sweep[-1]}")
-            print(f"------------------------------------------------------------")
-            
-            # write voltage staircase waveform
-            wv_range_mode = 0 # AUTO
-            wv_cmd = SweepType.FORWARD_REVERSE.b1500_wv_sweep_command(
-                ch=probe_drain,
-                range=wv_range_mode,
-                start=v_d_sweep[0],
-                stop=v_d_sweep[-1],
-                steps=num_points,
-                icomp=id_compliance,
-                pcomp=None, # ignore for now
-            )
-            # print(wv_cmd)
-            instr_b1500.write(wv_cmd)
-            query_error(instr_b1500)
-            
-            # write bulk bias
-            instr_b1500.write(f"DV {probe_sub},0,{v_sub},{id_compliance}")
-            query_error(instr_b1500)
-            
-            # write source bias
-            instr_b1500.write(f"DV {probe_source},0,{v_s},{id_compliance}")
-            query_error(instr_b1500)
-
-            # write gate bias
-            instr_b1500.write(f"DV {probe_gate},0,{v_g},{ig_compliance}")
-            query_error(instr_b1500)
-
-            # execute and wait for data response
-            instr_b1500.write("XE")
-
-            # set timeout (milliseconds)
-            instr_b1500.timeout = 60 * 1000
-            _opc = instr_b1500.query("*OPC?")
-            instr_b1500.timeout = 10 * 1000
-            query_error(instr_b1500)
-            
-            # zero probes after measurement
-            instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
-            instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
-            instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
-            instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
-            query_error(instr_b1500)
-            
-            # number of bytes in output data buffer
-            nbytes = int(instr_b1500.query("NUB?"))
-            print(f"nbytes={nbytes}")
-            buf = instr_b1500.read()
-            # print(buf)
-
-            # parse vals strings into numbers
-            vals = buf.strip().split(",")
-            vals = parse_keysight_str_values(vals)
-
-            # values chunked for each measurement point:
-            #   [ [vd0, id0, ig0] , [vgs1, id1, ig1], ... ]
-            val_chunks = [ x for x in iter_chunks(vals, 7) ]
-
-            # split val chunks into forward/reverse sweep components:
-            sweep_chunks = [val_chunks[0:num_points], val_chunks[num_points:]]
-
-            # values to print out to console for display
-            val_table = []
-
-            for s, sweep_vals in enumerate(sweep_chunks):
-                for i, vals_chunk in enumerate(sweep_vals):
-                    val_table.append([v_g, vals_chunk[6], vals_chunk[1], vals_chunk[3], vals_chunk[5]])
-                    
-                    data_measurement["v_s"][step, s, i] = v_s
-                    data_measurement["v_g"][step, s, i] = v_g
-                    data_measurement["v_d"][step, s, i] = vals_chunk[6]
-                    data_measurement["i_d"][step, s, i] = vals_chunk[1]
-                    data_measurement["i_s"][step, s, i] = vals_chunk[3]
-                    data_measurement["i_g"][step, s, i] = vals_chunk[5]
-                    # timestamps
-                    data_measurement["time_i_d"][step, s, i] = vals_chunk[0]
-                    data_measurement["time_i_s"][step, s, i] = vals_chunk[2]
-                    data_measurement["time_i_g"][step, s, i] = vals_chunk[4]
-            
-            print(tabulate(val_table, headers=["v_g [V]", "v_d [V]", "i_d [A]", "i_s [A]", "i_g [A]"]))
-
-            print("============================================================")
-
+        data_measurement, cancelled = run_rram_1t1r_sweeps(
+            program_name=ProgramKeysightRram1T1R.name,
+            instr_b1500=instr_b1500,
+            monitor_channel=monitor_channel,
+            signal_cancel=signal_cancel,
+            sweep_metadata=sweep_metadata,
+            query_error=query_error,
+            probe_gate=probe_gate,
+            probe_source=probe_source,
+            probe_drain=probe_drain,
+            probe_sub=probe_sub,
+            id_compliance=id_compliance,
+            ig_compliance=ig_compliance,
+            yield_during_measurement=yield_during_measurement,
+            bias_configs=bias_configs,
+            data_measurement=data_measurement,
+        )
+        
         # zero voltages: DZ (pg 4-79)
         # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
         # compliance values, and so on) and sets channels to 0 voltage.
@@ -645,9 +733,9 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
     """
     name = "keysight_rram_1t1r_sweep"
 
-
     @staticmethod
     def parse_sweep_sequence(
+        v_sub,
         v_s,
         v_g_reset,
         v_d_reset,
@@ -676,6 +764,7 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
             
             bias_configs.append(RramSweepConfig(
                 name="reset",
+                v_sub=v_sub,
                 v_s=v_s,
                 v_g=v_g_reset,
                 v_d_sweep=v_d_reset_sweep,
@@ -684,6 +773,7 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
             for i, v_d in enumerate(v_d_range):
                 bias_configs.append(RramSweepConfig(
                     name=f"v_g={v_g}, v_d={v_d}",
+                    v_sub=v_sub,
                     v_s=v_s,
                     v_g=v_g,
                     v_d_sweep=v_d_sweeps[i],
@@ -692,6 +782,7 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         # final reset sweep
         bias_configs.append(RramSweepConfig(
             name="reset",
+            v_sub=v_sub,
             v_s=v_s,
             v_g=v_g_reset,
             v_d_sweep=v_d_reset_sweep,
@@ -704,8 +795,8 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         """Return default `run` arguments config as a dict."""
         return {
             "probe_gate": 1,
-            "probe_source": 2,
-            "probe_drain": 3,
+            "probe_source": 4,
+            "probe_drain": 8,
             "probe_sub": 9,
             "v_sub": 0.0,
             "v_s": 0.0,
@@ -716,6 +807,134 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
             "v_step": 0.1,
         }
     
+    def run(
+        instr_b1500=None,
+        monitor_channel: EventChannel = None,
+        signal_cancel = None,
+        sweep_metadata: dict = {},
+        probe_gate=1,
+        probe_source=4,
+        probe_drain=8,
+        probe_sub=9,
+        v_sub=0.0,                 # substrate voltage, constant
+        v_s=0.0,                   # source voltage, constant
+        v_g_reset=-1.0,            # fixed reset gate voltage
+        v_d_reset=-2.0,            # fixed reset drain voltage
+        v_g_range=[0.4, 0.6, 0.8], # gate voltage sweep points
+        v_d_range=[1.0, 1.5, 2.5], # drain voltage sweep points
+        v_step=0.1,                # voltage step for drain sweeps
+        i_d_compliance=10e-3,      # ideally compliance should never hit (transistor should prevent)
+        i_g_compliance=1e-3,       # transistor gate current compliance
+        stop_on_error=True,
+        yield_during_measurement=True,
+        smu_slots={}, # map SMU number => actual slot number
+    ) -> MeasurementResult:
+        """Run the program."""
+        print(f"probe_gate = {probe_gate}")
+        print(f"probe_source = {probe_source}")
+        print(f"probe_drain = {probe_drain}")
+        print(f"probe_sub = {probe_sub}")
+        print(f"v_sub = {v_sub}")
+        print(f"v_sub = {v_s}")
+        print(f"v_g_reset = {v_g_reset}")
+        print(f"v_d_reset = {v_d_reset}")
+        print(f"v_g_range = {v_g_range}")
+        print(f"v_d_range = {v_d_range}")
+        print(f"i_d_compliance = {i_d_compliance}")
+        print(f"i_g_compliance = {i_g_compliance}")
+        
+        if instr_b1500 is None:
+            raise ValueError("Invalid instrument b1500 is None")
+        
+        # map smu probes to instrument slots
+        if len(smu_slots) > 0:
+            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
+            probe_source = map_smu_to_slot(smu_slots, probe_source)
+            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_sub = map_smu_to_slot(smu_slots, probe_sub)
+            logging.info("Mapped SMU to slot:")
+            logging.info(f"- probe_gate -> {probe_gate}")
+            logging.info(f"- probe_source -> {probe_source}")
+            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_sub -> {probe_sub}")
+
+        # error check function, closure wrapper with fixed `stop_on_error`` input
+        def query_error(instr_b1500):
+            _query_error(instr_b1500, stop_on_error)
+        
+        v_d_sweep = into_sweep_range(v_d_range)
+        v_g_sweep = into_sweep_range(v_g_range)
+
+        # parse voltage sweep ranges into list of sweep bias configs
+        bias_configs, num_points_max = ProgramKeysightRram1T1RSweep.parse_sweep_sequence(
+            v_sub=v_sub,
+            v_s=v_s,
+            v_g_reset=v_g_reset,
+            v_d_reset=v_d_reset,
+            v_g_range=v_g_sweep,
+            v_d_range=v_d_sweep,
+            v_step=v_step,
+        )
+        num_sequences = len(bias_configs)
+
+        # common measurement data block format
+        data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
+        # additional program specific data
+        data_measurement["v_d_sweep"] = v_d_sweep
+        data_measurement["v_g_sweep"] = v_g_sweep
+        # add sequence of npoints for each step
+        data_measurement["num_points"] = [ x.num_points for x in bias_configs ]
+
+        # measurement compliance settings
+        id_compliance = 0.100 # 100 mA complience
+        ig_compliance = 0.010 # 10 mA complience
+        pow_compliance = abs(id_compliance * np.max(v_d_sweep)) # power compliance [W]
+
+        # reset instrument
+        instr_b1500.write("*RST")
+        instr_b1500.query("ERRX?") # clear any existing error message and ignore
+
+        measurement_keysight_b1500_setup(
+            instr_b1500=instr_b1500,
+            query_error=query_error,
+            probe_gate=probe_gate,
+            probe_source=probe_source,
+            probe_drain=probe_drain,
+            probe_sub=probe_sub,
+            id_compliance=id_compliance,
+            ig_compliance=ig_compliance,
+            pow_compliance=pow_compliance,
+        )
+
+        data_measurement, cancelled = run_rram_1t1r_sweeps(
+            program_name=ProgramKeysightRram1T1RSweep.name,
+            instr_b1500=instr_b1500,
+            monitor_channel=monitor_channel,
+            signal_cancel=signal_cancel,
+            sweep_metadata=sweep_metadata,
+            query_error=query_error,
+            probe_gate=probe_gate,
+            probe_source=probe_source,
+            probe_drain=probe_drain,
+            probe_sub=probe_sub,
+            id_compliance=id_compliance,
+            ig_compliance=ig_compliance,
+            yield_during_measurement=yield_during_measurement,
+            bias_configs=bias_configs,
+            data_measurement=data_measurement,
+        )
+        
+        # zero voltages: DZ (pg 4-79)
+        # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
+        # compliance values, and so on) and sets channels to 0 voltage.
+        instr_b1500.write(f"DZ")
+
+        return MeasurementResult(
+            cancelled=cancelled,
+            data=data_measurement,
+        )
+
+
 class ProgramKeysightRram1T1RSequence(MeasurementProgram):
     """Implement 1T1R programming sequence. User defines string "codes"
     which define specific programming voltages for gate, drain, and source.
@@ -766,15 +985,17 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         # parse each code into a sweep config
         code_bias_configs = {}
         for code_name, voltages in codes.items():
-            if len(voltages) != 3:
-                raise ValueError(f"Invalid code {code_name} voltage sequence: {voltages}, must be [v_s, v_d, v_g]")
+            if len(voltages) != 4:
+                raise ValueError(f"Invalid code {code_name} voltage sequence: {voltages}, must be [v_sub, v_s, v_d, v_g]")
 
-            v_s = voltages[0]
-            v_d = voltages[1]
-            v_g = voltages[2]
+            v_sub = voltages[0]
+            v_s = voltages[1]
+            v_d = voltages[2]
+            v_g = voltages[3]
             
             code_bias_configs[code_name] = RramSweepConfig(
                 name=code_name,
+                v_sub=v_sub,
                 v_s=v_s,
                 v_g=v_g,
                 v_d_sweep=into_sweep_range({"start": 0, "stop": v_d, "step": v_step}),
@@ -800,14 +1021,12 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
             "probe_source": 2,
             "probe_drain": 3,
             "probe_sub": 9,
-            "v_sub": 0.0,
-            "v_s": 0.0,
-            "codes": { # format must be [v_s, v_d, v_g]
-                "reset": [0.0, -1.0, 0.5],
-                "read": [0.0, 0.5, 0.5],
-                "set1": [0.0, 2.0, 0.5],
-                "set2": [0.0, 2.5, 0.5],
-                "set3": [0.0, 3.0, 0.5],
+            "codes": { # format must be [v_sub, v_s, v_d, v_g]
+                "reset": [0.0, 0.0, -1.0, 0.5],
+                "read": [0.0, 0.0, 0.5, 0.5],
+                "set1": [0.0, 0.0, 2.0, 0.5],
+                "set2": [0.0, 0.0, 2.5, 0.5],
+                "set3": [0.0, 0.0, 3.0, 0.5],
             },
             "sequence": [
                 "reset",  # bit = 0
@@ -822,8 +1041,176 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
                 "read",
                 "set3",   # bit = 3
                 "read",
-            ]
+            ],
         }
+    
+    def run(
+        instr_b1500=None,
+        monitor_channel: EventChannel = None,
+        signal_cancel = None,
+        sweep_metadata: dict = {},
+        path_data_folder="",
+        path_save_dir="",
+        probe_gate=1,
+        probe_source=4,
+        probe_drain=8,
+        probe_sub=9,
+        codes={ # format must be [v_sub, v_s, v_d, v_g]
+            "reset": [0.0, 0.0, -1.0, 0.5],
+            "read": [0.0, 0.0, 0.5, 0.5],
+            "set1": [0.0, 0.0, 2.0, 0.5],
+            "set2": [0.0, 0.0, 2.5, 0.5],
+            "set3": [0.0, 0.0, 3.0, 0.5],
+        },
+        sequence=[
+            "reset",  # bit = 0
+            "read",
+            "set1",   # bit = 1
+            "read",
+            "reset",  # bit = 0
+            "read",
+            "set2",   # bit = 2
+            "read",
+            "reset",  # bit = 0
+            "read",
+            "set3",   # bit = 3
+            "read",
+        ],
+        repeat=1,
+        v_step=0.1,                # voltage step for drain sweeps
+        i_d_compliance=10e-3,      # ideally compliance should never hit (transistor should prevent)
+        i_g_compliance=1e-3,       # transistor gate current compliance
+        stop_on_error=True,
+        yield_during_measurement=True,
+        smu_slots={}, # map SMU number => actual slot number
+    ) -> MeasurementResult:
+        """Run the program."""
+        print(f"probe_gate = {probe_gate}")
+        print(f"probe_source = {probe_source}")
+        print(f"probe_drain = {probe_drain}")
+        print(f"probe_sub = {probe_sub}")
+        print(f"codes = {codes}")
+        print(f"sequence = {sequence}")
+        print(f"repeat = {repeat}")
+        print(f"i_d_compliance = {i_d_compliance}")
+        print(f"i_g_compliance = {i_g_compliance}")
+        
+        if instr_b1500 is None:
+            raise ValueError("Invalid instrument b1500 is None")
+        
+        # map smu probes to instrument slots
+        if len(smu_slots) > 0:
+            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
+            probe_source = map_smu_to_slot(smu_slots, probe_source)
+            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_sub = map_smu_to_slot(smu_slots, probe_sub)
+            logging.info("Mapped SMU to slot:")
+            logging.info(f"- probe_gate -> {probe_gate}")
+            logging.info(f"- probe_source -> {probe_source}")
+            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_sub -> {probe_sub}")
+
+        # error check function, closure wrapper with fixed `stop_on_error`` input
+        def query_error(instr_b1500):
+            _query_error(instr_b1500, stop_on_error)
+
+        # parse voltage sweep ranges into list of sweep bias configs
+        bias_configs, num_points_max = ProgramKeysightRram1T1RSequence.parse_sweep_sequence(
+            codes=codes,
+            sequence=sequence,
+            v_step=0.1,
+        )
+        num_sequences = len(bias_configs)
+        num_points_sequence = [ x.num_points for x in bias_configs ]
+
+        # measurement compliance settings
+        v_d_max = 0
+        for k, v in codes.items():
+            v_d_max = max(v_d_max, v[2])
+        id_compliance = 0.100 # 100 mA complience
+        ig_compliance = 0.010 # 10 mA complience
+        pow_compliance = abs(id_compliance * np.max(v_d_max)) # power compliance [W]
+
+        # reset instrument
+        instr_b1500.write("*RST")
+        instr_b1500.query("ERRX?") # clear any existing error message and ignore
+
+        measurement_keysight_b1500_setup(
+            instr_b1500=instr_b1500,
+            query_error=query_error,
+            probe_gate=probe_gate,
+            probe_source=probe_source,
+            probe_drain=probe_drain,
+            probe_sub=probe_sub,
+            id_compliance=id_compliance,
+            ig_compliance=ig_compliance,
+            pow_compliance=pow_compliance,
+        )
+
+        for n in range(repeat):
+            # create new data block for each reptition
+            # common measurement data block format
+            data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
+            # add sequence of npoints for each step
+            data_measurement["num_points"] = num_points_sequence
+            
+            data_measurement, cancelled = run_rram_1t1r_sweeps(
+                program_name=ProgramKeysightRram1T1RSweep.name,
+                instr_b1500=instr_b1500,
+                monitor_channel=monitor_channel,
+                signal_cancel=signal_cancel,
+                sweep_metadata=sweep_metadata,
+                query_error=query_error,
+                probe_gate=probe_gate,
+                probe_source=probe_source,
+                probe_drain=probe_drain,
+                probe_sub=probe_sub,
+                id_compliance=id_compliance,
+                ig_compliance=ig_compliance,
+                yield_during_measurement=yield_during_measurement,
+                bias_configs=bias_configs,
+                data_measurement=data_measurement,
+            )
+
+            # save data
+            if os.path.exists(path_data_folder):
+                path_dir = os.path.join(path_data_folder, path_save_dir)
+                os.makedirs(path_dir, exist_ok=True)
+
+                program_name = ProgramKeysightRram1T1RSequence.name
+                path_result_h5 = os.path.join(path_dir, f"{program_name}_{step}.h5")
+                path_result_mat = os.path.join(path_dir, f"{program_name}_{step}.mat")
+                
+                export_hdf5(path_result_h5, data_measurement)
+                export_mat(path_result_mat, data_measurement)
+
+            # show sequence data
+            if monitor_channel is not None:
+                monitor_channel.publish({
+                    "metadata": {
+                        "program": ProgramKeysightRram1T1RSequence.name,
+                        "config": sweep_metadata,
+                    },
+                    "data": dict_np_array_to_json_array(data_measurement), # converts np ndarrays to regular lists
+                })
+
+            if signal_cancel is not None and signal_cancel.is_cancelled():
+                logging.info(f"[ProgramKeysightRram1T1R] CANCELLING PROGRAM")
+                cancelled = True
+                break
+        
+        # zero voltages: DZ (pg 4-79)
+        # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
+        # compliance values, and so on) and sets channels to 0 voltage.
+        instr_b1500.write(f"DZ")
+
+        return MeasurementResult(
+            cancelled=cancelled,
+            save_data=False, # dont do save data externally, this is done within the sequence repeat loop
+            data=data_measurement,
+        )
+
+
 
 if __name__ == "__main__":
     """Tests running the program

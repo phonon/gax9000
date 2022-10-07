@@ -123,12 +123,16 @@ class MeasurementSweep(ABC):
         - `monitor_channel`: EventChannel object for sending status updates
         - `signal_cancel`: SignalCancelTask object for checking for user cancel signal
         - `sweep_metadata`: Copy of sweep metadata dict
+        - `path_data_folder`: Path to overall sweep data folder, for programs that do continuous data saving
+        - `path_save_dir`: Path to sweep specific data folder, for programs that do continuous data saving
         """
         result = program.run(
             instr_b1500=instr_b1500,
             monitor_channel=monitor_channel,
             signal_cancel=signal_cancel,
             sweep_metadata=sweep_metadata,
+            path_data_folder=data_folder,
+            path_save_dir=save_dir,
             **program_config,
         )
         
