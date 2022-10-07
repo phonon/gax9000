@@ -2,7 +2,7 @@
  * Render Id-Vgs data result.
  */
 
- import {
+import {
     Accordion, AccordionSummary, AccordionDetails,
     Box,
     Table, TableContainer, TableHead, TableRow, TableCell, TableBody,

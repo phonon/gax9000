@@ -1,5 +1,5 @@
 /**
- * Render Id-Vgs data result.
+ * Renderers for RRAM, 1T1R, etc. device measurements
  */
 
 import {
@@ -12,68 +12,75 @@ import Plot from "react-plotly.js";
 import { colormap, colorTo255Range, colorBrighten } from "../util.js";
 
 
-export const ProgramIdVds = ({
+export const ProgramRram1T1R = ({
     metadata,
     data,
 }) => {
-    console.log("RENDERING ProgramIdVds");
+    console.log("RENDERING ProgramRram1T1R");
     console.log(metadata);
     console.log(data);
 
     const measurementConfigString = JSON.stringify(metadata.config, null, 2);
 
     // get num points/bias points from data shape: (bias, sweeps, points)
-    const numBias = data.v_ds.length;
-    const numSweeps = data.v_ds[0].length;
-    const numPoints = data.v_ds[0][0].length;
+    const numBias = data.v_gs.length;
+    const numSweeps = data.v_gs[0].length;
+    const numPoints = data.v_gs[0][0].length;
 
     console.log(`numBias=${numBias}, numSweeps=${numSweeps}, numPoints=${numPoints}`);
 
-    const tracesIdVds = [];
-    const tracesIgVds = [];
+    const tracesIdVgs = [];
+    const tracesIgVgs = [];
 
     // key properties to display in data table
-    const vgsList = [];
+    const vdsList = [];
     const idMaxList = [];
+    const idMinList = [];
+    const onOffList = [];
     const igMaxList = [];
 
     for ( let b = 0; b < numBias; b++ ) {
         // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
         const colBase = colorTo255Range(colormap(b, -1, numBias));
         
-        // add vgs bias
-        vgsList.push(data.v_gs[b][0][0]);
+        // add vds bias
+        vdsList.push(data.v_ds[b][0][0]);
 
         for ( let s = 0; s < numSweeps; s++ ) {
             // make additional sweeps brighter for visibility
             const col = colorBrighten(colBase, 0.6 + (s * 0.4));
 
-            const vgs = data.v_gs[b][s][0];
-            const vds = data.v_ds[b][s];
+            const vds = data.v_ds[b][s][0];
+            const vgs = data.v_gs[b][s];
             const id = data.i_d[b][s];
             const ig = data.i_g[b][s];
             
             // key performance metrics (only do for first sweep):
+            // find max/min id and max ig in range
             if ( s === 0 ) {
                 const idMax = Math.max(...id);
+                const idMin = Math.min(...id);
                 const igMax = Math.max(...ig);
+                const onOff = idMax / idMin;
                 idMaxList.push(idMax.toExponential(2));
+                idMinList.push(idMin.toExponential(2));
+                onOffList.push(onOff.toExponential(2));
                 igMaxList.push(igMax.toExponential(2));
             }
 
             // create plot traces
-            tracesIdVds.push({
-                name: `Vgs=${vgs}, Dir=${s}`,
-                x: vds,
+            tracesIdVgs.push({
+                name: `Vds=${vds}, Dir=${s}`,
+                x: vgs,
                 y: id,
                 type: "scatter",
                 mode: "lines+markers",
                 marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
             });
             
-            tracesIgVds.push({
-                name: `Vgs=${vgs}, Dir=${s}`,
-                x: vds,
+            tracesIgVgs.push({
+                name: `Vds=${vds}, Dir=${s}`,
+                x: vgs,
                 y: ig,
                 type: "scatter",
                 mode: "lines+markers",
@@ -84,6 +91,8 @@ export const ProgramIdVds = ({
 
     const tableRows = [
         { name: "Id Max", values: idMaxList },
+        { name: "Id Min", values: idMinList },
+        { name: "On/Off", values: onOffList },
         { name: "Ig Max", values: igMaxList },
     ]
 
@@ -108,9 +117,9 @@ export const ProgramIdVds = ({
                     <Table size="small" aria-label="metrics table">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Vgs</TableCell>
-                                {vgsList.map((vgs, i) =>
-                                    <TableCell key={i}>{vgs}</TableCell>
+                                <TableCell>Vds</TableCell>
+                                {vdsList.map((vds, i) =>
+                                    <TableCell key={i}>{vds}</TableCell>
                                 )}
                             </TableRow>
                         </TableHead>
@@ -155,11 +164,29 @@ export const ProgramIdVds = ({
                 height: "100%",
                 overflow: "scroll",
             }}>
-                {/* Id-Vds */}
+                {/* Id-Vgs log */}
                 <Plot
-                    data={tracesIdVds}
+                    data={tracesIdVgs}
                     layout={ {
-                        title: "Id-Vds",
+                        title: "Id-Vgs (Log Scale)",
+                        width: 600,
+                        height: 600,
+                        xaxis: {
+                            type: "linear",
+                            autorange: true,
+                        },
+                        yaxis: {
+                            type: "log",
+                            autorange: true,
+                        }
+                    } }
+                />
+
+                {/* Id-Vgs linear */}
+                <Plot
+                    data={tracesIdVgs}
+                    layout={ {
+                        title: "Id-Vgs (Linear Scale)",
                         width: 600,
                         height: 600,
                         xaxis: {
@@ -175,7 +202,7 @@ export const ProgramIdVds = ({
 
                 {/* Ig-Vgs log */}
                 <Plot
-                    data={tracesIgVds}
+                    data={tracesIgVgs}
                     layout={ {
                         title: "Ig-Vgs",
                         width: 600,
