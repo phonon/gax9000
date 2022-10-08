@@ -6,6 +6,7 @@ import gevent
 import pyvisa
 import logging
 from tabulate import tabulate
+from controller.sse import EventChannel
 from controller.programs import MeasurementProgram, MeasurementResult, SweepType
 from controller.util import into_sweep_range, parse_keysight_str_values, iter_chunks
 
@@ -62,6 +63,9 @@ class ProgramKeysightIdVds(MeasurementProgram):
     
     def run(
         instr_b1500=None,
+        monitor_channel: EventChannel = None,
+        signal_cancel = None,
+        sweep_metadata: dict = {},
         probe_gate=8,
         probe_source=1,
         probe_drain=4,
@@ -79,6 +83,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         v_sub=0.0,
         negate_id=False,
         sweep_direction="fr",
+        **kwargs,
     ) -> dict:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")

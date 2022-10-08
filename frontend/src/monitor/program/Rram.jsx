@@ -62,10 +62,7 @@ export const ProgramRram1T1R = ({
         const n = sequenceNumPoints[s];
 
         // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
-        const colBase = colorTo255Range(colormap(s, -1, numBias));
-        
-        // add vd bias
-        vdList.push(data.v_d[s][0][0]);
+        const colBase = colorTo255Range(colormap(s, -1, numSequences));
 
         for ( let d = 0; d < numDirections; d++ ) {
             // make additional sweeps brighter for visibility
@@ -75,8 +72,8 @@ export const ProgramRram1T1R = ({
             const vs = data.v_s[s][d][0]; // const
             const vd = data.v_d[s][d].slice(0, n);
             const vg = data.v_g[s][d].slice(0, n);
-            const id = data.i_d[s][d].slice(0, n);
-            const ig = data.i_g[s][d].slice(0, n);
+            const id = data.i_d_abs[s][d].slice(0, n);
+            const ig = data.i_g_abs[s][d].slice(0, n);
             const res = data.res[s][d].slice(0, n);
 
             // key performance metrics (only do for first sweep):

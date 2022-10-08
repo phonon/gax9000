@@ -144,6 +144,10 @@ def calculate_derived_measurement_values(
     Add any standard derived measurement values to the post-measured data.
     Things like resistance = v/i.
     """
+    # absolute value of currents
+    data_measurement["i_d_abs"] = np.abs(data_measurement["i_d"])
+    data_measurement["i_s_abs"] = np.abs(data_measurement["i_s"])
+    data_measurement["i_g_abs"] = np.abs(data_measurement["i_g"])
     # add channel resistance = v_d / i_d
     data_measurement["res"] = np.abs(data_measurement["v_d"] / data_measurement["i_d"])
 
@@ -371,7 +375,10 @@ def run_rram_1t1r_sweeps(
         # print(f"num_points = {num_points}")
 
         print(f"============================================================")
-        print(f"Measuring step {step}: {sweep.name} @ v_d = {v_d_sweep[-1]}")
+        print(f"Measuring step {step}: {sweep.name}")
+        print(f"v_s = {v_s}")
+        print(f"v_g = {v_g}")
+        print(f"v_d = {v_d_sweep[0]} -> {v_d_sweep[-1]}")
         print(f"------------------------------------------------------------")
         
         # write voltage staircase waveform
@@ -473,6 +480,9 @@ def run_rram_1t1r_sweeps(
         if monitor_channel is not None and step < num_sequences-1: # don't publish last step
             def task_update_program_status():
                 """Update program status."""
+                data_cleaned = calculate_derived_measurement_values(data_measurement)
+                data_cleaned = dict_np_array_to_json_array(data_cleaned) # converts np ndarrays to regular lists and replace nan
+
                 monitor_channel.publish({
                     "metadata": {
                         "program": program_name,
@@ -480,7 +490,7 @@ def run_rram_1t1r_sweeps(
                         "step": step,
                         "step_total": num_sequences,
                     },
-                    "data": dict_np_array_to_json_array(data_measurement), # converts np ndarrays to regular lists
+                    "data": data_cleaned, 
                 })
             gevent.spawn(task_update_program_status)
         
@@ -523,11 +533,13 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
     def parse_sweep_sequence(
         sequence,
         v_sub,
-        v_s,
+        v_s_form,
         v_g_form,
         v_d_form_range,
+        v_s_set,
         v_g_set,
         v_d_set_range,
+        v_s_reset,
         v_g_reset,
         v_d_reset_range,
     ):
@@ -541,36 +553,40 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         for i in range(len(sequence)):
             pattern = sequence[i]
             if pattern == "f": # form
-                bias_configs.append(RramSweepConfig(name="form", v_sub=v_sub, v_s=v_s, v_g=v_g_form, v_d_sweep=v_d_form_range))
+                bias_configs.append(RramSweepConfig(name="form", v_sub=v_sub, v_s=v_s_form, v_g=v_g_form, v_d_sweep=v_d_form_range))
             elif pattern == "s": # set
-                bias_configs.append(RramSweepConfig(name="set", v_sub=v_sub, v_s=v_s, v_g=v_g_set, v_d_sweep=v_d_set_range))
+                bias_configs.append(RramSweepConfig(name="set", v_sub=v_sub, v_s=v_s_set, v_g=v_g_set, v_d_sweep=v_d_set_range))
             elif pattern == "r": # reset
-                bias_configs.append(RramSweepConfig(name="reset", v_sub=v_sub, v_s=v_s, v_g=v_g_reset, v_d_sweep=v_d_reset_range))
+                bias_configs.append(RramSweepConfig(name="reset", v_sub=v_sub, v_s=v_s_reset, v_g=v_g_reset, v_d_sweep=v_d_reset_range))
             else:
                 raise ValueError(f"Invalid sweep pattern: {pattern}")
 
         return bias_configs
 
     def default_config():
-        """Return default `run` arguments config as a dict."""
+        """Return default `run` arguments config as a dict.
+        Note: values based on a BE device with PMOS access.
+        """
         return {
             "probe_gate": 1,
-            "probe_source": 2,
-            "probe_drain": 3,
+            "probe_source": 4,
+            "probe_drain": 8,
             "probe_sub": 9,
-            "v_sub": 0.0,
-            "v_s": 0.0,
-            "v_d_form": 3.0,
-            "v_g_form": 1.0,
-            "v_g_reset": 1.0,
+            "v_sub": 0,
+            "v_s_form": 0.0,
+            "v_d_form": 2.5,
+            "v_g_form": -0.6,
+            "v_s_reset": 0.0,
+            "v_g_reset": -1.5,
             "v_d_reset": -2.0,
+            "v_s_set": 0.0,
             "v_d_set": 2.0,
-            "v_g_set": 1.0,
+            "v_g_set": -0.6,
             "v_step": 0.1,
-            "i_compliance_form": 1e-3,
-            "i_compliance_set": 1e-3,
-            "i_compliance_reset": 1e-3,
-            "sequence": "fsr",
+            "i_compliance_form": 10e-3,
+            "i_compliance_set": 10e-3,
+            "i_compliance_reset": 10e-3,
+            "sequence": "frs",
         }
 
     def run(
@@ -583,13 +599,15 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         probe_drain=8,
         probe_sub=9,
         v_sub=0.0,                # substrate voltage, constant
-        v_s=0.0,                  # source voltage, constant
-        v_d_form=3.0,             # form drain voltage sweep
-        v_g_form=1.0,             # form gate voltage (fixed)
-        v_d_reset=-2.0,           # reset drain voltage sweep
-        v_g_reset=1.0,            # reset gate voltage (fixed)
-        v_d_set=2.0,              # set drain voltage sweep
-        v_g_set=1.0,              # set gate voltage (fixed)
+        v_s_form=0.0,             # form source voltage, const
+        v_d_form=2.5,             # form drain voltage, sweep
+        v_g_form=-0.6,            # form gate voltage, const
+        v_s_reset=0.0,            # reset source voltage, const
+        v_d_reset=-2.0,           # reset drain voltage, sweep
+        v_g_reset=-1.5,           # reset gate voltage, const
+        v_s_set=0.0,              # set source voltage, const
+        v_d_set=2.0,              # set drain voltage, sweep
+        v_g_set=-0.6,             # set gate voltage, const
         v_step=0.1,               # voltage step for drain sweeps
         i_compliance_form=10e-3,  # ideally compliance should never hit (transistor should prevent)
         i_compliance_set=10e-3,
@@ -598,6 +616,7 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         stop_on_error=True,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
+        **kwargs,
     ) -> MeasurementResult:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
@@ -605,13 +624,15 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         print(f"probe_drain = {probe_drain}")
         print(f"probe_sub = {probe_sub}")
         print(f"v_sub = {v_sub}")
-        print(f"v_sub = {v_s}")
+        print(f"v_s_form = {v_s_form}")
         print(f"v_d_form = {v_d_form}")
-        print(f"v_d_set = {v_d_set}")
-        print(f"v_d_reset = {v_d_reset}")
         print(f"v_g_form = {v_g_form}")
-        print(f"v_g_set = {v_g_set}")
+        print(f"v_s_reset = {v_s_reset}")
+        print(f"v_d_reset = {v_d_reset}")
         print(f"v_g_reset = {v_g_reset}")
+        print(f"v_s_set = {v_s_set}")
+        print(f"v_g_set = {v_g_set}")
+        print(f"v_d_set = {v_d_set}")
         print(f"i_compliance_form = {i_compliance_form}")
         print(f"i_compliance_set = {i_compliance_set}")
         print(f"i_compliance_reset = {i_compliance_reset}")
@@ -652,17 +673,19 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         bias_configs = ProgramKeysightRram1T1R.parse_sweep_sequence(
             sequence=sequence,
             v_sub=v_sub,
-            v_s=v_s,
+            v_s_form=v_s_form,
             v_g_form=v_g_form,
             v_d_form_range=v_d_form_range,
+            v_s_set=v_s_set,
             v_g_set=v_g_set,
             v_d_set_range=v_d_set_range,
+            v_s_reset=v_s_reset,
             v_g_reset=v_g_reset,
             v_d_reset_range=v_d_reset_range,
         )
         
         # common measurement data block format
-        data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
+        data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points_max=num_points_max)
         # additional program specific data
         data_measurement["sequence"] = sequence
         # add sequence names and npoints for each step
@@ -846,6 +869,7 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         stop_on_error=True,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
+        **kwargs,
     ) -> MeasurementResult:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
@@ -896,7 +920,7 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         num_sequences = len(bias_configs)
 
         # common measurement data block format
-        data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
+        data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points_max=num_points_max)
         # additional program specific data
         data_measurement["v_d_sweep"] = v_d_sweep
         data_measurement["v_g_sweep"] = v_g_sweep
@@ -1102,6 +1126,7 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         stop_on_error=True,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
+        **kwargs,
     ) -> MeasurementResult:
         """Run the program."""
         print(f"probe_gate = {probe_gate}")
@@ -1170,7 +1195,7 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         for n in range(repeat):
             # create new data block for each reptition
             # common measurement data block format
-            data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points=num_points_max)
+            data_measurement = sweep_sequence_data_block(num_sequences=num_sequences, num_points_max=num_points_max)
             # add sequence names and npoints for each step
             data_measurement["step_names"] = step_names
             data_measurement["num_points"] = num_points_sequence

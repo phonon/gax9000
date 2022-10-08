@@ -18,3 +18,7 @@ logs
 
 # debug result folder
 debug
+
+# scripts data files
+scripts/**/*.h5
+scripts/**/*.mat
