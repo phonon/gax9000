@@ -177,6 +177,9 @@ class ControllerSettings():
         self.invert_direction = invert_direction
         self.smu_slots = smu_slots
 
+    def __repr__(self):
+        return self.__dict__.__repr__()
+
     def default():
         """Return a default settings object."""
         return ControllerSettings(

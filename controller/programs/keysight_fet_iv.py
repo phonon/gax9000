@@ -235,8 +235,8 @@ class ProgramKeysightIdVgs(MeasurementProgram):
     def default_config():
         """Return default `run` arguments config as a dict."""
         return {
-            "probe_gate": 8,
-            "probe_source": 1,
+            "probe_gate": 1,
+            "probe_source": 8,
             "probe_drain": 4,
             "probe_sub": 9,
             "v_gs": {
@@ -246,7 +246,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             },
             "v_ds": [-0.05, -1.2],
             "v_sub": 0.0,
-            "negate_id": False,
+            "negate_id": True,
             "sweep_direction": "fr",
         }
 
@@ -255,20 +255,20 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         monitor_channel: EventChannel = None,
         signal_cancel=None,
         sweep_metadata: dict = {},
-        probe_gate=2,
-        probe_source=7,
-        probe_drain=6,
+        probe_gate=1,
+        probe_source=8,
+        probe_drain=4,
         probe_sub=9,
         v_gs={
-            "start": -2.0,
-            "stop": 2.0,
+            "start": -1.2,
+            "stop": 1.2,
             "step": 0.1,
         },
         v_ds=[-0.050, -1.2],
         v_sub=0.0,
-        negate_id=False,
+        negate_id=True,
         sweep_direction="fr",
-        stop_on_error=True,
+        stop_on_error=False,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
         **kwargs,
@@ -375,7 +375,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                     stop=v_gs_range[-1],
                     steps=len(v_gs_range),
                     icomp=id_compliance,
-                    pcomp=None,
+                    pcomp=None, # can trigger false errors
                 ))
                 query_error(instr_b1500)
                 
@@ -467,9 +467,9 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                     data={
                         "v_ds": v_ds_out,
                         "v_gs": v_gs_out,
-                        "i_d": i_d_out,
-                        "i_s": i_s_out,
-                        "i_g": i_g_out,
+                        "i_d": np.abs(i_d_out), # for easier plotting
+                        "i_s": np.abs(i_s_out),
+                        "i_g": np.abs(i_g_out),
                         "time_i_d": time_i_d_out,
                         "time_i_s": time_i_s_out,
                         "time_i_g": time_i_g_out,
@@ -544,22 +544,22 @@ class ProgramKeysightIdVds(MeasurementProgram):
     def default_config():
         """Return default `run` arguments config as a dict."""
         return {
-            "probe_gate": 8,
-            "probe_source": 1,
+            "probe_gate": 1,
+            "probe_source": 8,
             "probe_drain": 4,
             "probe_sub": 9,
             "v_gs": {
-                "start": -1.2,
-                "stop": 1.2,
-                "step": 0.2,
+                "start": 0.0,
+                "stop": -1.2,
+                "step": 0.4,
             },
             "v_ds": {
                 "start": 0.0,
-                "stop": 2.0,
+                "stop": -2.0,
                 "step": 0.1,
             },
             "v_sub": 0.0,
-            "negate_id": False,
+            "negate_id": True,
             "sweep_direction": "fr",
         }
     
@@ -568,24 +568,24 @@ class ProgramKeysightIdVds(MeasurementProgram):
         monitor_channel: EventChannel = None,
         signal_cancel=None,
         sweep_metadata: dict = {},
-        probe_gate=8,
-        probe_source=1,
+        probe_gate=1,
+        probe_source=8,
         probe_drain=4,
         probe_sub=9,
         v_gs={
             "start": 0.0,
-            "stop": 1.2,
+            "stop": -1.2,
             "step": 0.4,
         },
         v_ds={
             "start": 0.0,
-            "stop": 2.0,
+            "stop": -2.0,
             "step": 0.1,
         },
         v_sub=0.0,
-        negate_id=False,
+        negate_id=True,
         sweep_direction="fr",
-        stop_on_error=True,
+        stop_on_error=False,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
         **kwargs,
@@ -650,8 +650,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # measurement compliance settings
         id_compliance = 0.1 # 100 mA complience
         ig_compliance = 0.01 # 1 mA complience
-        # pow_compliance = 2 * abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
-        pow_compliance = 0.3 # ??? random abort error?
+        pow_compliance = 2 * abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W], added some margin
 
         # standard keysight initialization for IV measurements
         measurement_keysight_b1500_setup(
@@ -692,7 +691,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
                     stop=v_ds_range[-1],
                     steps=len(v_ds_range),
                     icomp=id_compliance,
-                    pcomp=pow_compliance,
+                    pcomp=None, # can trigger false errors
                 ))
                 query_error(instr_b1500)
                 
@@ -784,9 +783,9 @@ class ProgramKeysightIdVds(MeasurementProgram):
                     data={
                         "v_ds": v_ds_out,
                         "v_gs": v_gs_out,
-                        "i_d": i_d_out,
-                        "i_s": i_s_out,
-                        "i_g": i_g_out,
+                        "i_d": np.abs(i_d_out), # for easier plotting
+                        "i_s": np.abs(i_s_out),
+                        "i_g": np.abs(i_g_out),
                         "time_i_d": time_i_d_out,
                         "time_i_s": time_i_s_out,
                         "time_i_g": time_i_g_out,
@@ -841,7 +840,10 @@ if __name__ == "__main__":
     Tests running the programs as standalone command-line module.
     """
     import argparse
+    import os
+    import json
     from controller.util.io import export_hdf5, export_mat
+    from controller.backend import ControllerSettings
 
     parser = argparse.ArgumentParser(description="Run FET IV measurement.")
 
@@ -872,24 +874,19 @@ if __name__ == "__main__":
     
     # TODO: configure this shit
 
-    # # smu slot mappings (for gax2)
-    smu_slots = {}
-    # smu_slots = {
-    #     "1": 2,
-    #     "2": 3,
-    #     "3": 4,
-    #     "4": 5,
-    #     "5": 6,
-    #     "6": 7,
-    #     "7": 8,
-    #     "8": 9,
-    #     "9": 10
-    # }
-
+    # try to load default settings from "./settings/config.json"
+    path_config = os.path.join("settings", "config.json")
+    if os.path.exists(path_config):
+        with open(path_config, "r") as f:
+            config = ControllerSettings(**json.load(f))
+    else:
+        config = ControllerSettings() # default
+    
+    print(f"CONFIG = {config}")
     instr_b1500 = rm.open_resource(
-        "GPIB0::17::INSTR",
-        read_termination="\n",
-        write_termination="\n",
+        f"GPIB0::{config.gpib_b1500}::INSTR",
+        # read_termination="\n", # default, not needed
+        # write_termination="\n",
     )
 
     print(instr_b1500.query("*IDN?"))
@@ -900,7 +897,7 @@ if __name__ == "__main__":
         try:
             result = program.run(
                 instr_b1500=instr_b1500,
-                smu_slots=smu_slots,
+                smu_slots=config.smu_slots,
             )
             # print(result)
         except Exception as err:
