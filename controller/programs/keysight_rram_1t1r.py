@@ -577,8 +577,8 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
             "v_d_form": 2.5,
             "v_g_form": -0.6,
             "v_s_reset": 0.0,
-            "v_g_reset": -1.5,
             "v_d_reset": -2.0,
+            "v_g_reset": -1.5,
             "v_s_set": 0.0,
             "v_d_set": 2.0,
             "v_g_set": -0.6,
@@ -1061,8 +1061,8 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         """Return default `run` arguments config as a dict."""
         return {
             "probe_gate": 1,
-            "probe_source": 2,
-            "probe_drain": 3,
+            "probe_source": 4,
+            "probe_drain": 8,
             "probe_sub": 9,
             "codes": { # format must be [v_sub, v_s, v_d, v_g]
                 "reset": [0.0, 0.0, -1.0, 0.5],
@@ -1257,6 +1257,124 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         )
 
 
+
+class ProgramKeysightRram1T1RPulsedForm(MeasurementProgram):
+    """Implement 1T1R pulsed form sweep using bitline voltage at a fixed
+    gate bias:
+
+            Vform
+             _     _     _     
+            | |   | |   | |    
+            | |   | |   | |    
+       _____| |___| |___| |___ 
+                _        
+                |
+            |---+        
+     Vg ---o|      (PMOS)
+    = -1 V  |---+        
+                |        
+                |        
+                X        
+                X   RRAM 
+                X   (BE) 
+                |        
+                v        
+              BE = 0 V
+
+    This sweep will pulse the bitline voltage to try and cause the partial
+    breakdown formation in RRAM, then do a read at read voltage for user
+    to check resistance:
+
+        for n in range(repeat):
+            1. pulse bitline voltage
+            2. do read at read voltage (to check resistance)
+    """
+    name = "keysight_rram_1t1r_pulsed_form"
+
+    @staticmethod
+    def default_config():
+        """Return default `run` arguments config as a dict."""
+        return {
+            "probe_gate": 1,
+            "probe_source": 4,
+            "probe_drain": 8,
+            "probe_sub": 9,
+            "v_sub": 0,
+            "v_s_form": 0.0,
+            "v_d_form": 2.5,
+            "v_g_form": -0.6,
+            "v_s_read": 0.0,
+            "v_d_read": 0.5,
+            "v_g_read": -1.0,
+            "repeat": 1,
+            "v_step": 0.1,
+        }
+    
+    def run(
+        instr_b1500=None,
+        monitor_channel: EventChannel = None,
+        signal_cancel = None,
+        sweep_metadata: dict = {},
+        path_data_folder="",
+        path_save_dir="",
+        probe_gate=1,
+        probe_source=4,
+        probe_drain=8,
+        probe_sub=9,
+        v_sub=0.0,
+        v_s_form=0.0,
+        v_d_form=2.5,
+        v_g_form=-0.6,
+        v_s_read=0.0,
+        v_d_read=0.5,
+        v_g_read=-1.0,
+        repeat=1,
+        v_step=0.1,                # voltage step for drain sweeps
+        i_d_compliance=10e-3,      # ideally compliance should never hit (transistor should prevent)
+        i_g_compliance=1e-3,       # transistor gate current compliance
+        stop_on_error=True,
+        yield_during_measurement=True,
+        smu_slots={}, # map SMU number => actual slot number
+        **kwargs,
+    ) -> MeasurementResult:
+        
+        if instr_b1500 is None:
+            raise ValueError("Invalid instrument b1500 is None")
+        
+        # map smu probes to instrument slots
+        if len(smu_slots) > 0:
+            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
+            probe_source = map_smu_to_slot(smu_slots, probe_source)
+            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_sub = map_smu_to_slot(smu_slots, probe_sub)
+            logging.info("Mapped SMU to slot:")
+            logging.info(f"- probe_gate -> {probe_gate}")
+            logging.info(f"- probe_source -> {probe_source}")
+            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_sub -> {probe_sub}")
+
+        # error check function, closure wrapper with fixed `stop_on_error`` input
+        def query_error(instr_b1500):
+            _query_error(instr_b1500, stop_on_error)
+
+        id_compliance = 0.100 # 100 mA complience
+        ig_compliance = 0.010 # 10 mA complience
+        pow_compliance = abs(id_compliance * np.max(v_d_form)) # power compliance [W]
+
+        # reset instrument
+        instr_b1500.write("*RST")
+        instr_b1500.query("ERRX?") # clear any existing error message and ignore
+        
+        # zero voltages: DZ (pg 4-79)
+        # The DZ command stores the settings (V/I output values, V/I output ranges, V/I
+        # compliance values, and so on) and sets channels to 0 voltage.
+        instr_b1500.write(f"DZ")
+
+        return MeasurementResult(
+            cancelled=cancelled,
+            save_data=False, # dont do save data externally, this is done within the sequence repeat loop
+            data=data_measurement,
+        )
 
 if __name__ == "__main__":
     """Tests running the program
