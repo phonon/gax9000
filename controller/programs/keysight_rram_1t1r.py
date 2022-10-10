@@ -52,7 +52,7 @@ RESET use negative voltage on top):
                 BE = 0 V                 VS = 0 V
 """
 import traceback
-from multiprocessing.sharedctypes import Value
+import os
 import numpy as np
 import gevent
 import pyvisa
