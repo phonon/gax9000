@@ -3,7 +3,7 @@ Implement 1T1R rram measurement.
                  Vg
                 __|__
         Vd  ____|   |____xxxxxx____ Vs
-                    FET      RRAM
+                 FET      RRAM
 1T1R RRAM structure is a FET and RRAM in series. The FET serves
 two purposes:
     1.  Enforces a compliance current for setting the RRAM to
@@ -411,7 +411,7 @@ def run_rram_1t1r_sweeps(
         # execute and wait for data response
         instr_b1500.write("XE")
         
-        # simulate running measurement and a blocking read query
+        # starting time for step
         t_start = time()
 
         # yield green thread during measurement to let other tasks run

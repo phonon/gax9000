@@ -411,7 +411,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
 
 
 if __name__ == "__main__":
-    """Tests running the program
+    """Tests running the programs as standalone command-line module.
     """
     
     rm = pyvisa.ResourceManager()

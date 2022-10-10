@@ -75,10 +75,10 @@ class MeasurementProgram(ABC):
             from controller.programs.debug import ProgramDebugMultistep
             return ProgramDebugMultistep
         elif s == "keysight_id_vds":
-            from controller.programs.keysight_id_vds import ProgramKeysightIdVds
+            from controller.programs.keysight_fet_iv import ProgramKeysightIdVds
             return ProgramKeysightIdVds
         elif s == "keysight_id_vgs":
-            from controller.programs.keysight_id_vgs import ProgramKeysightIdVgs
+            from controller.programs.keysight_fet_iv import ProgramKeysightIdVgs
             return ProgramKeysightIdVgs
         elif s == "keysight_rram_1t1r":
             from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1R
@@ -120,6 +120,22 @@ class SweepType(Enum):
             2: log sweep, single-stair start to stop
             3: linear sweep, double-stair start to stop to start
             4: log sweep, double-stair, start to stop to start
+        
+        As example:
+        Each Id-Vgs measurement is a staircase sweep (pg 2-8).
+        The Vds is stepped at a constant bias on each step,
+        while Vgs is sweeped in a separate WV staircase measurement.
+        
+        Vgs
+            |          Measurement points
+            |            |   |   |   |
+            |            v   v   v   v
+            |WV                     ___
+            |                   ___/   \    
+            |   XE          ___/        \  
+            |____       ___/             \ 
+            |    \_____/                  \___
+            |_____________________________________ time
         """
         pow_comp = f",{pcomp}" if pcomp is not None else ""
 

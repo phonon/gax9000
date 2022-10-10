@@ -23,7 +23,7 @@ export const ProgramIdVds = ({
     const measurementConfigString = JSON.stringify(metadata.config, null, 2);
 
     // get num points/bias points from data shape: (bias, sweeps, points)
-    const numBias = data.v_ds.length;
+    const numBias = metadata.step !== undefined ? metadata.step : data.v_ds.length;
     const numSweeps = data.v_ds[0].length;
     const numPoints = data.v_ds[0][0].length;
 
