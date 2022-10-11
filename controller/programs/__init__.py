@@ -4,6 +4,10 @@ Define interface for measurement programs on B1500.
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from typing import Iterator, Tuple
+from __future__ import annotations
+# TODO: in future python 3.11, we can import "from typing import Self" for type hint
+
 
 # list of available program names (hardcoded)
 MEASUREMENT_PROGRAMS = [
@@ -11,6 +15,8 @@ MEASUREMENT_PROGRAMS = [
     "debug_multistep",
     "keysight_id_vds",
     "keysight_id_vgs",
+    "keysight_id_vds_pulsed_dc",
+    "keysight_id_vgs_pulsed_dc",
     "keysight_rram_1t1r",
     "keysight_rram_1t1r_sweep",
     "keysight_rram_1t1r_sequence",
@@ -80,6 +86,12 @@ class MeasurementProgram(ABC):
         elif s == "keysight_id_vgs":
             from controller.programs.keysight_fet_iv import ProgramKeysightIdVgs
             return ProgramKeysightIdVgs
+        elif s == "keysight_id_vds_pulsed_dc":
+            from controller.programs.keysight_fet_iv import ProgramKeysightIdVdsPulsedDC
+            return ProgramKeysightIdVdsPulsedDC
+        elif s == "keysight_id_vgs_pulsed_dc":
+            from controller.programs.keysight_fet_iv import ProgramKeysightIdVgsPulsedDC
+            return ProgramKeysightIdVgsPulsedDC
         elif s == "keysight_rram_1t1r":
             from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1R
             return ProgramKeysightRram1T1R
@@ -108,10 +120,11 @@ class SweepType(Enum):
             WV ch,mode,range,start,stop,step[,Icomp[,Pcomp]]
         Parameters:
         - ch: SMU channel
+        - mode: sweep mode (forward/rev/fwd-rev/rev-fwd), integer 1-4
         - range: ranging type for staircase (Table 4-4)
         - start: start voltage
         - stop: stop voltage
-        - steps: steps in staircase sweep
+        - steps: number of steps in staircase sweep
         - icomp: current compliance in [A]
         - pcomp: power compliance in [W], resolution 0.001 W
 
@@ -151,6 +164,56 @@ class SweepType(Enum):
         elif self == SweepType.REVERSE_FORWARD:
             mode = 3
             return f"WV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
+        else:
+            raise ValueError(f"Invalid SweepType: {self}")
+    
+    def b1500_pwv_sweep_command(self, ch, range, start, stop, steps, icomp, pcomp=None, base=0):
+        """This returns b1500 GPIB WV voltage sweep mode command (4-173, pg 493):
+            PWV ch,mode,range,base,start,stop,step[,Icomp[,Pcomp]
+        Parameters:
+        - ch: SMU channel
+        - mode: sweep mode (forward/rev/fwd-rev/rev-fwd), integer 1-4
+        - range: ranging type for staircase (Table 4-4)
+        - base: base voltage (voltage floor between pulses)
+        - start: start voltage
+        - stop: stop voltage
+        - steps: number of steps in staircase sweep
+        - icomp: current compliance in [A]
+        - pcomp: power compliance in [W], resolution 0.001 W
+        
+        As example:
+        Each Id-Vgs measurement is a pulse staircase sweep (2-12).
+        The Vds is stepped at a constant bias on each step,
+        while Vgs is sweeped in a separate PWV staircase measurement.
+        
+             Vgs
+              |            Measurement points
+              |             |       |       |
+              |             |       |       v
+              |WV           |       |     ___
+              |             |       v    |   |
+              |   XE        v     ___    |   |
+              |____       ___    |   |   |   | 
+        BASE _|    \_____|   |___|   |___|   |_____
+          V   |_____________________________________ time
+
+        Note: difference between this and WV command is that we need a "base voltage"
+        parameter which is voltage LOW value floor between pulse HIGH values.
+        """
+        pow_comp = f",{pcomp}" if pcomp is not None else ""
+
+        if self == SweepType.FORWARD:
+            mode = 1
+            return f"PWV {ch},{mode},{range},{start},{stop},{steps},{icomp}{pow_comp}"
+        elif self == SweepType.REVERSE:
+            mode = 1
+            return f"PWV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
+        elif self == SweepType.FORWARD_REVERSE:
+            mode = 3
+            return f"PWV {ch},{mode},{range},{start},{stop},{steps},{icomp}{pow_comp}"
+        elif self == SweepType.REVERSE_FORWARD:
+            mode = 3
+            return f"PWV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
         else:
             raise ValueError(f"Invalid SweepType: {self}")
 
@@ -216,7 +279,7 @@ class SweepType(Enum):
         return count
     
     @staticmethod
-    def iter_with_sweep_index(sweeps: list):
+    def iter_with_sweep_index(sweeps: list) -> Iterator[Tuple[int, SweepType]]:
         """Create iterator that yields running sweep index,
         where ForwardReverse and ReverseForward iterate the index
         by 2 (since they are composed of two sweeps).

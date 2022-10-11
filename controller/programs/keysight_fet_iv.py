@@ -38,6 +38,9 @@ def measurement_keysight_b1500_setup(
     id_compliance: float,
     ig_compliance: float,
     pow_compliance: float,
+    pulsed: bool = False, # flag for dc pulsed, 500 us pulse widths
+    pulse_width: float = 0.0005, # pulse width in secs
+    pulse_period: float = 0.010, # pulse period, 0 = auto, min = 5 ms
 ):
     """Standard shared setup for FET IV measurements.
     """
@@ -62,7 +65,7 @@ def measurement_keysight_b1500_setup(
     ADC_TYPE_HISPEED = 0
     ADC_TYPE_HIRES = 1
     ADC_TYPE_PULSE = 2
-    adc_type = ADC_TYPE_HISPEED
+    adc_type = ADC_TYPE_PULSE if pulsed else ADC_TYPE_HISPEED
     instr_b1500.write(f"AAD {probe_drain},{adc_type}")
     query_error(instr_b1500)
     instr_b1500.write(f"AAD {probe_source},{adc_type}")
@@ -114,9 +117,52 @@ def measurement_keysight_b1500_setup(
     print(f"DV {probe_source},0,0,{id_compliance}")
     query_error(instr_b1500)
 
+    if pulsed:
+        # set the hold time, pulse width, and pulse period for a pulse
+        # source set by the PI, PV, PWI or PWV command. This command also
+        # sets the trigger output delay time. (4-168, pg 488)
+        # For pulsed spot measurements:
+        #       PT hold,width[,period[,Tdelay]]
+        # For pulsed sweep or staircase sweep with pulsed bias measurements:
+        #       PT hold,width,period[,Tdelay]
+        # hold : Hold time (in seconds). Numeric expression. 0 to 655.35 sec.
+        #   10 ms resolution. Initial setting = 0.
+        # width : Pulse width (in seconds). Numeric expression.
+        #   Initial setting = 1 ms.
+        #       - HR/HP/MPSMU: 500 μs to 2 s, 100 μs resolution
+        #       - HVSMU: 500 μs to 2 s, 2 μs resolution
+        #       - HCSMU / dual HCSMU: 50 μs to 2 s, 2 μs resolution. Maximum 1 ms
+        #           and duty ratio ≤ 1 % for using 20 A range or 40 A range.
+        #       - MCSMU: 10 μs to 100 ms and duty ratio maximum 5 % for 1 A range,
+        #           10 μs to 2 s for other range, 2 μs resolution
+        #       - UHCU: 10 μs to 1 ms and duty ratio maximum 0.4 % for 500 A range, 10
+        #           μs to 500 μs and duty ratio maximum 0.1 % for 2000 A range, 2 μs
+        #           resolution.
+        #       - UHVU: 100 μs to 1 ms for 100 mA range, 100 μs to 2 s for other range,
+        #           2 μs resolution.
+        #       - HVMCU: 10 μs to 1 ms for 100 mA range, 10 μs to 100 μs for 1 A/2 A
+        #           range, 2 μs resolution.
+        # period : Pulse period (in seconds). Numeric expression. 0, -1, or 5 ms to
+        #   5.0 s. (0.1 ms resolution). For using UHVU, minimum pulse period is 10 ms.
+        #   Initial setting = 10 ms. Default setting = 0.
+        #       - period ≥ width + 2 ms (for width ≤ 100 ms)
+        #       - period ≥ width + 10 ms (for 100 ms < width)
+        #       - period =-1: Automatically set to the effective minimum period.
+        #       - period =0: Automatically set to the longest one of the followings.
+        #       - Minimum period given by the pulse width and the duty ratio
+        #       - Pulse period = 5 ms (for width ≤ 3 ms)
+        #       - Pulse period = width + 2 ms (for 3 ms < width ≤ 100 ms)
+        #       - Pulse period = width + 10 ms (for 100 ms < width)
+        # Tdelay : Trigger output delay time (in seconds). Numeric expression. 0 to width.
+        #   0.1 ms resolution. Initial or default setting = 0.
+        #   This parameter is the time from pulse leading edge to timing of trigger
+        #   output from a trigger output terminal.
+        pulse_hold = 0.010 # 10 ms
+        instr_b1500.write(f"PT {pulse_hold},{pulse_width},{pulse_period}");
+
     # set measurement mode to multi-channel staircase sweep (MODE = 16) (4-151, pg 471):
     #   MM mode,ch0,ch1,ch2,...
-    mm_mode = 16
+    mm_mode = 4 if pulsed else 16
     instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_source},{probe_gate}");
     query_error(instr_b1500)
 
@@ -167,9 +213,16 @@ def measurement_keysight_b1500_setup(
     #                        | measure |                   | measure |
     #        |<----- repeat -------------->|
     #
-    wt_hold = 0.010  # 10 ms
-    wt_delay = 0.010 # 10 ms, seems OK. if this is not 0, then it seems like first measurement is much lower than the others
-    wt_sdelay = 0    # step delay
+    if pulsed:
+        # pulsed staircase example on 3-29 (pg. 209) sets all to 0
+        wt_hold = 0
+        wt_delay = 0
+        wt_sdelay = 0
+    else:
+        # standard staircase, these were valued used in past in stanford/mit
+        wt_hold = 0.010  # 10 ms
+        wt_delay = 0.010 # 10 ms, seems OK. if this is not 0, then it seems like first measurement is much lower than the others
+        wt_sdelay = 0    # step delay
     instr_b1500.write(f"WT {wt_hold},{wt_delay},{wt_sdelay}")
     query_error(instr_b1500)
 
@@ -271,19 +324,26 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         stop_on_error=False,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
+        pulsed=False, # use DC pulsed mode
+        pulse_width=0.0005, # pulse width (dc pulsed mode)
+        pulse_period=0.010, # pulse period (dc pulsed mode)
         **kwargs,
     ) -> dict:
         """Run the program."""
-        print(f"probe_gate = {probe_gate}")
-        print(f"probe_source = {probe_source}")
-        print(f"probe_drain = {probe_drain}")
-        print(f"probe_sub = {probe_sub}")
-        print(f"v_ds = {v_ds}")
-        print(f"v_gs = {v_gs}")
-        print(f"v_sub = {v_sub}")
-        print(f"negate_id = {negate_id}")
-        print(f"sweep_direction = {sweep_direction}")
-        print(f"smu_slots = {smu_slots}")
+        logging.info(f"probe_gate = {probe_gate}")
+        logging.info(f"probe_source = {probe_source}")
+        logging.info(f"probe_drain = {probe_drain}")
+        logging.info(f"probe_sub = {probe_sub}")
+        logging.info(f"v_ds = {v_ds}")
+        logging.info(f"v_gs = {v_gs}")
+        logging.info(f"v_sub = {v_sub}")
+        logging.info(f"negate_id = {negate_id}")
+        logging.info(f"sweep_direction = {sweep_direction}")
+        logging.info(f"smu_slots = {smu_slots}")
+        logging.info(f"pulsed = {pulsed}")
+        if pulsed:
+            logging.info(f"pulse_width = {pulse_width}")
+            logging.info(f"pulse_period = {pulse_period}")
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
@@ -347,6 +407,9 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
             pow_compliance=pow_compliance,
+            pulsed=pulsed,
+            pulse_width=pulse_width,
+            pulse_period=pulse_period,
         )
 
         # ===========================================================
@@ -354,6 +417,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         # ===========================================================
 
         # sweep state
+        pulsed_str = "(VGS DC Pulsed)" if pulsed else "" # just print indicator that this is pulsed
         t_run_avg = None  # avg program step time
         cancelled = False # flag for program cancelled before done
 
@@ -363,12 +427,18 @@ class ProgramKeysightIdVgs(MeasurementProgram):
 
             for idx_dir, sweep_type in SweepType.iter_with_sweep_index(sweeps):
                 print(f"==============================")
-                print(f"Measuring step (Vds = {v_ds_val} V)...")
+                print(f"Measuring step (Vds = {v_ds_val} V)... {pulsed_str}")
                 print(f"------------------------------")
                 
+                # select regular held staircase or pulsed staircase
+                if pulsed:
+                    sweep_command = sweep_type.b1500_pwv_sweep_command
+                else:
+                    sweep_command = sweep_type.b1500_wv_sweep_command
+
                 # write voltage staircase waveform
                 wv_range_mode = 0 # AUTO
-                instr_b1500.write(sweep_type.b1500_wv_sweep_command(
+                instr_b1500.write(sweep_command(
                     ch=probe_gate,
                     range=wv_range_mode,
                     start=v_gs_range[0],
@@ -588,18 +658,25 @@ class ProgramKeysightIdVds(MeasurementProgram):
         stop_on_error=False,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
+        pulsed=False, # use DC pulsed mode
+        pulse_width=0.0005, # pulse width (dc pulsed mode)
+        pulse_period=0.010, # pulse period (dc pulsed mode)
         **kwargs,
     ) -> dict:
         """Run the program."""
-        print(f"probe_gate = {probe_gate}")
-        print(f"probe_source = {probe_source}")
-        print(f"probe_drain = {probe_drain}")
-        print(f"probe_sub = {probe_sub}")
-        print(f"v_ds = {v_ds}")
-        print(f"v_gs = {v_gs}")
-        print(f"v_sub = {v_sub}")
-        print(f"negate_id = {negate_id}")
-        print(f"sweep_direction = {sweep_direction}")
+        logging.info(f"probe_gate = {probe_gate}")
+        logging.info(f"probe_source = {probe_source}")
+        logging.info(f"probe_drain = {probe_drain}")
+        logging.info(f"probe_sub = {probe_sub}")
+        logging.info(f"v_ds = {v_ds}")
+        logging.info(f"v_gs = {v_gs}")
+        logging.info(f"v_sub = {v_sub}")
+        logging.info(f"negate_id = {negate_id}")
+        logging.info(f"sweep_direction = {sweep_direction}")
+        logging.info(f"pulsed = {pulsed}")
+        if pulsed:
+            logging.info(f"pulse_width = {pulse_width}")
+            logging.info(f"pulse_period = {pulse_period}")
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
@@ -663,6 +740,9 @@ class ProgramKeysightIdVds(MeasurementProgram):
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
             pow_compliance=pow_compliance,
+            pulsed=pulsed,
+            pulse_width=pulse_width,
+            pulse_period=pulse_period,
         )
         
         # ===========================================================
@@ -670,6 +750,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
         # ===========================================================
 
         # sweep state
+        pulsed_str = "(VDS DC Pulsed)" if pulsed else "" # just print indicator that this is pulsed
         t_run_avg = None  # avg program step time
         cancelled = False # flag for program cancelled before done
 
@@ -679,12 +760,18 @@ class ProgramKeysightIdVds(MeasurementProgram):
 
             for idx_dir, sweep_type in SweepType.iter_with_sweep_index(sweeps):
                 print(f"==============================")
-                print(f"Measuring step {idx_bias+1}/{len(v_gs_range)} (Vgs = {v_gs_val} V)...")
+                print(f"Measuring step {idx_bias+1}/{len(v_gs_range)} (Vgs = {v_gs_val} V)... {pulsed_str}")
                 print(f"------------------------------")
+
+                # select regular held staircase or pulsed staircase
+                if pulsed:
+                    sweep_command = sweep_type.b1500_pwv_sweep_command
+                else:
+                    sweep_command = sweep_type.b1500_wv_sweep_command
                 
                 # write voltage staircase waveform
                 wv_range_mode = 0 # AUTO
-                instr_b1500.write(sweep_type.b1500_wv_sweep_command(
+                instr_b1500.write(sweep_command(
                     ch=probe_drain,
                     range=wv_range_mode,
                     start=v_ds_range[0],
@@ -835,6 +922,76 @@ class ProgramKeysightIdVds(MeasurementProgram):
         )
 
 
+class ProgramKeysightIdVgsPulsedDC(MeasurementProgram):
+    """Implement Id-Vgs sweep but with DC pulsed sweep. This is just a wrapper
+    around ProgramKeysightIdVgs that makes sure the program is called with 
+    `pulsed=True`. 
+    """
+    name = "keysight_id_vgs_pulsed_dc"
+
+    def default_config():
+        """Return default `run` arguments config as a dict."""
+        return {
+            "probe_gate": 1,
+            "probe_source": 8,
+            "probe_drain": 4,
+            "probe_sub": 9,
+            "v_gs": {
+                "start": -1.2,
+                "stop": 1.2,
+                "step": 0.1,
+            },
+            "v_ds": [-0.05, -1.2],
+            "v_sub": 0.0,
+            "negate_id": True,
+            "sweep_direction": "fr",
+            "pulse_width": 0.0005,
+            "pulse_period": 0.010,
+        }
+
+    def run(
+        **kwargs,
+    ) -> dict:
+        return ProgramKeysightIdVgs.run(pulsed=True, **kwargs)
+
+
+class ProgramKeysightIdVdsPulsedDC(MeasurementProgram):
+    """Implement Id-Vds sweep but with DC pulsed sweep. This is just a wrapper
+    around ProgramKeysightIdVds that makes sure the program is called with 
+    `pulsed=True`. 
+    """
+    name = "keysight_id_vds_pulsed_dc"
+
+    def default_config():
+        """Return default `run` arguments config as a dict."""
+        return {
+            "probe_gate": 1,
+            "probe_source": 8,
+            "probe_drain": 4,
+            "probe_sub": 9,
+            "v_gs": {
+                "start": 0.0,
+                "stop": -1.2,
+                "step": 0.4,
+            },
+            "v_ds": {
+                "start": 0.0,
+                "stop": -2.0,
+                "step": 0.1,
+            },
+            "v_sub": 0.0,
+            "negate_id": True,
+            "sweep_direction": "fr",
+            "pulse_width": 0.0005,
+            "pulse_period": 0.010,
+        }
+
+    def run(
+        **kwargs,
+    ) -> dict:
+        return ProgramKeysightIdVds.run(pulsed=True, **kwargs)
+
+
 if __name__ == "__main__":
     """
     Tests running the programs as standalone command-line module.
@@ -860,6 +1017,10 @@ if __name__ == "__main__":
         program = ProgramKeysightIdVgs
     elif args.program == "idvd":
         program = ProgramKeysightIdVds
+    elif args.program == "idvg_pulsed_dc":
+        program = ProgramKeysightIdVgsPulsedDC
+    elif args.program == "idvd_pulsed_dc":
+        program = ProgramKeysightIdVdsPulsedDC
     else:
         print("INVALID PROGRAM NAME: supported are 'idvg', 'idvd'")
         parser.print_help()
