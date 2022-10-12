@@ -1,11 +1,11 @@
 """
 Define interface for measurement programs on B1500.
 """
+from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import Iterator, Tuple
-from __future__ import annotations
 # TODO: in future python 3.11, we can import "from typing import Self" for type hint
 
 
@@ -167,19 +167,34 @@ class SweepType(Enum):
         else:
             raise ValueError(f"Invalid SweepType: {self}")
     
-    def b1500_pwv_sweep_command(self, ch, range, start, stop, steps, icomp, pcomp=None, base=0):
-        """This returns b1500 GPIB WV voltage sweep mode command (4-173, pg 493):
-            PWV ch,mode,range,base,start,stop,step[,Icomp[,Pcomp]
+    def b1500_mcpwnx_sweep_commands(self, ch, range, start, stop, steps, icomp, pcomp=None, base=0) -> list[str]:
+        """
+        This returns a list of MCPWS and a MCPWNX command. These are both 
+        needed to run a multi-channel pulsed sweep measurement.
+        
+        MCPWNX: set sweep mode and number of steps
+            MCPWS mode,step
         Parameters:
-        - ch: SMU channel
-        - mode: sweep mode (forward/rev/fwd-rev/rev-fwd), integer 1-4
-        - range: ranging type for staircase (Table 4-4)
-        - base: base voltage (voltage floor between pulses)
-        - start: start voltage
-        - stop: stop voltage
-        - steps: number of steps in staircase sweep
-        - icomp: current compliance in [A]
-        - pcomp: power compliance in [W], resolution 0.001 W
+            mode : sweep mode (forward/rev/fwd-rev/rev-fwd), integer 1-4
+                1: Linear sweep (single stair, start to stop.)
+                2: Log sweep (single stair, start to stop.)
+                3: Linear sweep (double stair, start to stop to start.)
+                4: Log sweep (double stair, start to stop to start.)
+            step : Number of sweep steps. Numeric expression. 1 to 10001.
+
+        MCPWNX: pulsed staircase sweep (4-173, pg 493):
+            MCPWNX N,ch,mode,range,base,start,stop[,comp[,Pcomp]]
+        Parameters:
+            N: source number, the N value and the chnum value set to the
+                MCPNX, MCPWNX, and WNX commands must be unique for execution.
+            ch: SMU channel
+            mode: 1: voltage source, 2: current source
+            range: ranging type for staircase (Table 4-4)
+            base: base voltage (voltage floor between pulses)
+            start: start voltage
+            stop: stop voltage
+            icomp: current compliance in [A]
+            pcomp: power compliance in [W], resolution 0.001 W
         
         As example:
         Each Id-Vgs measurement is a pulse staircase sweep (2-12).
@@ -203,19 +218,29 @@ class SweepType(Enum):
         pow_comp = f",{pcomp}" if pcomp is not None else ""
 
         if self == SweepType.FORWARD:
-            mode = 1
-            return f"PWV {ch},{mode},{range},{start},{stop},{steps},{icomp}{pow_comp}"
+            sweep_mode = 1
+            sweep_start = start
+            sweep_stop = stop
         elif self == SweepType.REVERSE:
-            mode = 1
-            return f"PWV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
+            sweep_mode = 1
+            sweep_start = stop
+            sweep_stop = start
         elif self == SweepType.FORWARD_REVERSE:
             mode = 3
-            return f"PWV {ch},{mode},{range},{start},{stop},{steps},{icomp}{pow_comp}"
+            sweep_mode = 3
+            sweep_start = start
+            sweep_stop = stop
         elif self == SweepType.REVERSE_FORWARD:
-            mode = 3
-            return f"PWV {ch},{mode},{range},{stop},{start},{steps},{icomp}{pow_comp}"
+            sweep_mode = 3
+            sweep_start = stop
+            sweep_stop = start
         else:
             raise ValueError(f"Invalid SweepType: {self}")
+        
+        return [
+            f"MCPWS {sweep_mode}{steps},"
+            f"MCPWNX 1,{ch},1,{range},{base},{sweep_start},{sweep_stop},{icomp}{pow_comp}",
+        ]
 
     @staticmethod
     def parse_string(s: str):

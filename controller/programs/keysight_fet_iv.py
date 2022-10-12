@@ -41,6 +41,7 @@ def measurement_keysight_b1500_setup(
     pulsed: bool = False, # flag for dc pulsed, 500 us pulse widths
     pulse_width: float = 0.0005, # pulse width in secs
     pulse_period: float = 0.010, # pulse period, 0 = auto, min = 5 ms
+    probe_pulse: int = -1, # the probe used for pulse sweep, e.g. gate probe for ID-VGS
 ):
     """Standard shared setup for FET IV measurements.
     """
@@ -59,7 +60,7 @@ def measurement_keysight_b1500_setup(
 
     # instr_b1500.write("AV 10,1") # sets ADC number of samples for 1 data
     # query_error(instr_b1500)
-
+    print("AAD")
     # select type of A/D converter (4-33, pg 353):
     #   ADD channel,type
     ADC_TYPE_HISPEED = 0
@@ -75,6 +76,7 @@ def measurement_keysight_b1500_setup(
     instr_b1500.write(f"AAD {probe_sub},{adc_type}")
     query_error(instr_b1500)
 
+    print("AIT")
 
     # Sets up high speed adc (4-38, pg 358)""
     #   AIT type,mode,N
@@ -91,16 +93,18 @@ def measurement_keysight_b1500_setup(
     # averaging samples, integer expression, for mode = 0, 1 and 2. Or the
     # actual measurement time, numeric expression, for mode = 3... see table
     # 4-21 on page 4-39
-    ADC_HISPEED_MODE_AUTO = 0
-    ADC_HISPEED_MODE_MANUAL = 1
-    ADC_HISPEED_MODE_POWER_LINE_CYCLE = 2
-    ADC_HISPEED_MODE_MEASUREMENT_TIME = 3
+    if not pulsed: # for pulsed, this is automatically set
+        ADC_HISPEED_MODE_AUTO = 0
+        ADC_HISPEED_MODE_MANUAL = 1
+        ADC_HISPEED_MODE_POWER_LINE_CYCLE = 2
+        ADC_HISPEED_MODE_MEASUREMENT_TIME = 3
 
-    adc_mode = ADC_HISPEED_MODE_AUTO
-    adc_sampling_coeff = 30
+        adc_mode = ADC_HISPEED_MODE_AUTO
+        adc_sampling_coeff = 30
 
-    instr_b1500.write(f"AIT {adc_type},{adc_mode},{adc_sampling_coeff}")
-    query_error(instr_b1500)
+        instr_b1500.write(f"AIT {adc_type},{adc_mode},{adc_sampling_coeff}")
+        query_error(instr_b1500)
+    print("DV")
 
     # zero voltage to probes, DV (pg 4-78) cmd sets DC voltage on channels:
     #   DV {probe},{vrange},{v},{icompliance}
@@ -118,52 +122,49 @@ def measurement_keysight_b1500_setup(
     query_error(instr_b1500)
 
     if pulsed:
-        # set the hold time, pulse width, and pulse period for a pulse
-        # source set by the PI, PV, PWI or PWV command. This command also
+        # Set pulse hold time, pulse width, and pulse period for a pulse
+        # source set by the multi-channel PI, PV, PWI or PWV command. This command also
         # sets the trigger output delay time. (4-168, pg 488)
-        # For pulsed spot measurements:
-        #       PT hold,width[,period[,Tdelay]]
-        # For pulsed sweep or staircase sweep with pulsed bias measurements:
-        #       PT hold,width,period[,Tdelay]
-        # hold : Hold time (in seconds). Numeric expression. 0 to 655.35 sec.
-        #   10 ms resolution. Initial setting = 0.
-        # width : Pulse width (in seconds). Numeric expression.
-        #   Initial setting = 1 ms.
-        #       - HR/HP/MPSMU: 500 μs to 2 s, 100 μs resolution
-        #       - HVSMU: 500 μs to 2 s, 2 μs resolution
-        #       - HCSMU / dual HCSMU: 50 μs to 2 s, 2 μs resolution. Maximum 1 ms
-        #           and duty ratio ≤ 1 % for using 20 A range or 40 A range.
-        #       - MCSMU: 10 μs to 100 ms and duty ratio maximum 5 % for 1 A range,
-        #           10 μs to 2 s for other range, 2 μs resolution
-        #       - UHCU: 10 μs to 1 ms and duty ratio maximum 0.4 % for 500 A range, 10
-        #           μs to 500 μs and duty ratio maximum 0.1 % for 2000 A range, 2 μs
-        #           resolution.
-        #       - UHVU: 100 μs to 1 ms for 100 mA range, 100 μs to 2 s for other range,
-        #           2 μs resolution.
-        #       - HVMCU: 10 μs to 1 ms for 100 mA range, 10 μs to 100 μs for 1 A/2 A
-        #           range, 2 μs resolution.
-        # period : Pulse period (in seconds). Numeric expression. 0, -1, or 5 ms to
-        #   5.0 s. (0.1 ms resolution). For using UHVU, minimum pulse period is 10 ms.
-        #   Initial setting = 10 ms. Default setting = 0.
-        #       - period ≥ width + 2 ms (for width ≤ 100 ms)
-        #       - period ≥ width + 10 ms (for 100 ms < width)
-        #       - period =-1: Automatically set to the effective minimum period.
-        #       - period =0: Automatically set to the longest one of the followings.
-        #       - Minimum period given by the pulse width and the duty ratio
-        #       - Pulse period = 5 ms (for width ≤ 3 ms)
-        #       - Pulse period = width + 2 ms (for 3 ms < width ≤ 100 ms)
-        #       - Pulse period = width + 10 ms (for 100 ms < width)
-        # Tdelay : Trigger output delay time (in seconds). Numeric expression. 0 to width.
-        #   0.1 ms resolution. Initial or default setting = 0.
-        #   This parameter is the time from pulse leading edge to timing of trigger
-        #   output from a trigger output terminal.
+        #
+        # MCPT: hold time, pulse period, measurement timing, and number measurements (4-154, pg. 465)
+        #       MCPT hold[,period[,Mdelay[,average]]]
+        # Parameters:
+        #   - hold: hold time (in seconds), 10 ms resolution
+        #   - period: pulse period (in seconds), 5 ms to 10 s, 0.1 ms resolution.
+        #   - Mdelay: Measurement timing (in seconds) from the beginning of the pulse
+        #       period to the beginning of the measurement. Default = 0, value set auto
+        #       so measurement completes when peak to base begins
+        #   - average: Number of measurements for averaging, default = 1.
+        #
+        # 
+        # MCPNT: delay time and pulse widths (4-142, pg. 462)
+        #       MCPNT chnum,delay,width
+        # Parameters:
+        #   - chnum: smu channel
+        #   - delay: delay time (in seconds) from the beginning of the pulse period to the
+        #           beginning of the transition from base to peak.
+        #   - width: pulse width (in seconds)
+        # For our HRSMU, delay is 0, width is 500 us to 2s, with 100 us resolution.
+        
+        print("MCPT")
         pulse_hold = 0.010 # 10 ms
-        instr_b1500.write(f"PT {pulse_hold},{pulse_width},{pulse_period}");
+        instr_b1500.write(f"MCPT {pulse_hold},{pulse_period}")
+        print("MCPNT")
+        instr_b1500.write(f"MCPNT {probe_pulse},0,{pulse_width}")
 
+    print("MM")
     # set measurement mode to multi-channel staircase sweep (MODE = 16) (4-151, pg 471):
-    #   MM mode,ch0,ch1,ch2,...
-    mm_mode = 4 if pulsed else 16
-    instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_source},{probe_gate}");
+    if pulsed:
+        # for pulsed, can only use one channel for pulse bias
+        # MM mode,ch0,ch1,ch2,...
+        # mm_mode = 4
+        mm_mode = 28
+        # instr_b1500.write(f"MM {mm_mode},{probe_pulse}")
+        instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_source},{probe_gate}")
+    else:
+        # MM mode,ch0,ch1,ch2,...
+        mm_mode = 16
+        instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_source},{probe_gate}")
     query_error(instr_b1500)
 
     # set probe current measurement mode (4-62, pg 382):
@@ -321,7 +322,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         v_sub=0.0,
         negate_id=True,
         sweep_direction="fr",
-        stop_on_error=False,
+        stop_on_error=True,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
         pulsed=False, # use DC pulsed mode
@@ -410,6 +411,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
             pulsed=pulsed,
             pulse_width=pulse_width,
             pulse_period=pulse_period,
+            probe_pulse=probe_gate,
         )
 
         # ===========================================================
@@ -432,13 +434,13 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 
                 # select regular held staircase or pulsed staircase
                 if pulsed:
-                    sweep_command = sweep_type.b1500_pwv_sweep_command
+                    sweep_command = sweep_type.b1500_mcpwnx_sweep_commands
                 else:
                     sweep_command = sweep_type.b1500_wv_sweep_command
 
                 # write voltage staircase waveform
                 wv_range_mode = 0 # AUTO
-                instr_b1500.write(sweep_command(
+                cmds = sweep_command(
                     ch=probe_gate,
                     range=wv_range_mode,
                     start=v_gs_range[0],
@@ -446,7 +448,14 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                     steps=len(v_gs_range),
                     icomp=id_compliance,
                     pcomp=None, # can trigger false errors
-                ))
+                )
+
+                if pulsed: # this is array
+                    for cmd in cmds:
+                        instr_b1500.write(cmd)
+                else:
+                    instr_b1500.write(cmds)
+
                 query_error(instr_b1500)
                 
                 # write drain bias
@@ -743,6 +752,7 @@ class ProgramKeysightIdVds(MeasurementProgram):
             pulsed=pulsed,
             pulse_width=pulse_width,
             pulse_period=pulse_period,
+            probe_pulse=probe_drain,
         )
         
         # ===========================================================
