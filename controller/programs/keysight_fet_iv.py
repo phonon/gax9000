@@ -66,14 +66,19 @@ def measurement_keysight_b1500_setup(
     ADC_TYPE_HISPEED = 0
     ADC_TYPE_HIRES = 1
     ADC_TYPE_PULSE = 2
-    adc_type = ADC_TYPE_PULSE if pulsed else ADC_TYPE_HISPEED
-    instr_b1500.write(f"AAD {probe_drain},{adc_type}")
+    adc_types = {
+        probe_drain: ADC_TYPE_PULSE if pulsed and probe_pulse == probe_drain else ADC_TYPE_HISPEED,
+        probe_source: ADC_TYPE_PULSE if pulsed and probe_pulse == probe_source else ADC_TYPE_HISPEED,
+        probe_gate: ADC_TYPE_PULSE if pulsed and probe_pulse == probe_gate else ADC_TYPE_HISPEED,
+        probe_sub: ADC_TYPE_HISPEED,
+    }
+    instr_b1500.write(f"AAD {probe_drain},{adc_types[probe_drain]}")
     query_error(instr_b1500)
-    instr_b1500.write(f"AAD {probe_source},{adc_type}")
+    instr_b1500.write(f"AAD {probe_source},{adc_types[probe_source]}")
     query_error(instr_b1500)
-    instr_b1500.write(f"AAD {probe_gate},{adc_type}")
+    instr_b1500.write(f"AAD {probe_gate},{adc_types[probe_gate]}")
     query_error(instr_b1500)
-    instr_b1500.write(f"AAD {probe_sub},{adc_type}")
+    instr_b1500.write(f"AAD {probe_sub},{adc_types[probe_sub]}")
     query_error(instr_b1500)
 
     print("AIT")
@@ -93,17 +98,18 @@ def measurement_keysight_b1500_setup(
     # averaging samples, integer expression, for mode = 0, 1 and 2. Or the
     # actual measurement time, numeric expression, for mode = 3... see table
     # 4-21 on page 4-39
-    if not pulsed: # for pulsed, this is automatically set
-        ADC_HISPEED_MODE_AUTO = 0
-        ADC_HISPEED_MODE_MANUAL = 1
-        ADC_HISPEED_MODE_POWER_LINE_CYCLE = 2
-        ADC_HISPEED_MODE_MEASUREMENT_TIME = 3
+    ADC_HISPEED_MODE_AUTO = 0
+    ADC_HISPEED_MODE_MANUAL = 1
+    ADC_HISPEED_MODE_POWER_LINE_CYCLE = 2
+    ADC_HISPEED_MODE_MEASUREMENT_TIME = 3
 
-        adc_mode = ADC_HISPEED_MODE_AUTO
-        adc_sampling_coeff = 30
+    adc_hires_mode = ADC_HISPEED_MODE_AUTO
+    adc_hires_sampling_coeff = 30
+    instr_b1500.write(f"AIT {ADC_TYPE_HIRES},{adc_hires_mode},{adc_hires_sampling_coeff}")
+    query_error(instr_b1500)
 
-        instr_b1500.write(f"AIT {adc_type},{adc_mode},{adc_sampling_coeff}")
-        query_error(instr_b1500)
+    # TODO: set pulsed ADC mode?
+
     print("DV")
 
     # zero voltage to probes, DV (pg 4-78) cmd sets DC voltage on channels:
@@ -189,7 +195,8 @@ def measurement_keysight_b1500_setup(
     RANGE_MODE_100NA = 13    # 100 nA limited auto
     RANGE_MODE_1UA = 14      # 1 uA limited auto
     RANGE_MODE_1MA = 17      # 1 mA limited auto
-    range_mode = RANGE_MODE_1NA
+    RANGE_MODE_100UA_FIXED = -17 # 100 uA range fixed
+    range_mode = RANGE_MODE_AUTO if pulsed else RANGE_MODE_1NA
     instr_b1500.write(f"RI {probe_source},{range_mode}")
     instr_b1500.write(f"RI {probe_drain},{range_mode}")
     instr_b1500.write(f"RI {probe_gate},{range_mode}")
@@ -450,8 +457,9 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                     pcomp=None, # can trigger false errors
                 )
 
-                if pulsed: # this is array
+                if pulsed: # this is array, kind of messy
                     for cmd in cmds:
+                        print(cmd)
                         instr_b1500.write(cmd)
                 else:
                     instr_b1500.write(cmds)
@@ -500,7 +508,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
                 nbytes = int(instr_b1500.query("NUB?"))
                 print(f"nbytes={nbytes}")
                 buf = instr_b1500.read()
-                # print(buf)
+                print(buf)
 
                 # parse vals strings into numbers
                 vals = buf.strip().split(",")
@@ -955,7 +963,7 @@ class ProgramKeysightIdVgsPulsedDC(MeasurementProgram):
             "v_sub": 0.0,
             "negate_id": True,
             "sweep_direction": "fr",
-            "pulse_width": 0.0005,
+            "pulse_width": 0.0010,
             "pulse_period": 0.010,
         }
 

@@ -1,5 +1,5 @@
 /**
- * Render debug data result.
+ * Render debug datasets result.
  */
 
 import {
@@ -14,80 +14,87 @@ import { colormap, colorTo255Range, colorBrighten } from "../util.js";
 
 export const ProgramDebug = ({
     metadata,
-    data,
+    datasets,
 }) => {
     console.log("RENDERING ProgramDebug");
     console.log(metadata);
-    console.log(data);
+    console.log(datasets);
 
     const measurementConfigString = JSON.stringify(metadata.config, null, 2);
-
-    // get num points/bias points
-    const numBias = metadata.step !== undefined ? metadata.step : data.v_gs.length;
-    const numSweeps = data.v_gs[0].length;
-    const numPoints = data.v_gs[0][0].length;
-
-    console.log(`numBias=${numBias}, numSweeps=${numSweeps}, numPoints=${numPoints}`);
 
     const tracesIdVgs = [];
     const tracesIgVgs = [];
 
-    // key properties to display in data table
+    // key properties to display in datasets table
     const vdsList = [];
     const idMaxList = [];
     const idMinList = [];
     const onOffList = [];
     const igMaxList = [];
 
-    for ( let b = 0; b < numBias; b++ ) {
-        // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
-        const colBase = colorTo255Range(colormap(b, -1, numBias));
+    for ( const dataset of datasets.values() ) {
+        const datasetMetadata = dataset.metadata;
+        const data = dataset.data;
+
+        // get num points/bias points
+        const numBias = datasetMetadata.step !== undefined ? datasetMetadata.step : data.v_gs.length;
+        const numSweeps = data.v_gs[0].length;
+        const numPoints = data.v_gs[0][0].length;
+
+        console.log(`numBias=${numBias}, numSweeps=${numSweeps}, numPoints=${numPoints}`);
         
-        // add vds bias
-        vdsList.push(data.v_ds[b][0][0]);
-
-        for ( let s = 0; s < numSweeps; s++ ) {
-            // make additional sweeps brighter for visibility
-            const col = colorBrighten(colBase, 0.6 + (s * 0.4));
-
-            const vds = data.v_ds[b][s][0];
-            const vgs = data.v_gs[b][s];
-            const id = data.i_d[b][s];
-            const ig = data.i_g[b][s];
+        for ( let b = 0; b < numBias; b++ ) {
+            // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
+            const colBase = colorTo255Range(colormap(b, -1, numBias));
             
-            // key performance metrics (only do for first sweep):
-            // find max/min id and max ig in range
-            if ( s === 0 ) {
-                const idMax = Math.max(...id);
-                const idMin = Math.min(...id);
-                const igMax = Math.max(...ig);
-                const onOff = idMax / idMin;
-                idMaxList.push(idMax.toExponential(2));
-                idMinList.push(idMin.toExponential(2));
-                onOffList.push(onOff.toExponential(2));
-                igMaxList.push(igMax.toExponential(2));
+            // add vds bias
+            vdsList.push(data.v_ds[b][0][0]);
+
+            for ( let s = 0; s < numSweeps; s++ ) {
+                // make additional sweeps brighter for visibility
+                const col = colorBrighten(colBase, 0.6 + (s * 0.4));
+
+                const vds = data.v_ds[b][s][0];
+                const vgs = data.v_gs[b][s];
+                const id = data.i_d[b][s];
+                const ig = data.i_g[b][s];
+                
+                // key performance metrics (only do for first sweep):
+                // find max/min id and max ig in range
+                if ( s === 0 ) {
+                    const idMax = Math.max(...id);
+                    const idMin = Math.min(...id);
+                    const igMax = Math.max(...ig);
+                    const onOff = idMax / idMin;
+                    idMaxList.push(idMax.toExponential(2));
+                    idMinList.push(idMin.toExponential(2));
+                    onOffList.push(onOff.toExponential(2));
+                    igMaxList.push(igMax.toExponential(2));
+                }
+
+                // create plot traces
+                tracesIdVgs.push({
+                    name: `Vds=${vds}, Dir=${s}`,
+                    x: vgs,
+                    y: id,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
+                
+                tracesIgVgs.push({
+                    name: `Vds=${vds}, Dir=${s}`,
+                    x: vgs,
+                    y: ig,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
             }
-
-            // create plot traces
-            tracesIdVgs.push({
-                name: `Vds=${vds}, Dir=${s}`,
-                x: vgs,
-                y: id,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
-            
-            tracesIgVgs.push({
-                name: `Vds=${vds}, Dir=${s}`,
-                x: vgs,
-                y: ig,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
         }
     }
+
+    console.log("tracesIdVgs", tracesIdVgs);
 
     const tableRows = [
         { name: "Id Max", values: idMaxList },

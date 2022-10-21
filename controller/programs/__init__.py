@@ -238,7 +238,7 @@ class SweepType(Enum):
             raise ValueError(f"Invalid SweepType: {self}")
         
         return [
-            f"MCPWS {sweep_mode}{steps},"
+            f"MCPWS {sweep_mode},{steps}",
             f"MCPWNX 1,{ch},1,{range},{base},{sweep_start},{sweep_stop},{icomp}{pow_comp}",
         ]
 
