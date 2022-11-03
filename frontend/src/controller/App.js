@@ -1,5 +1,5 @@
 import "./css/app.css";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
     Box,
     Button, 
@@ -23,22 +23,36 @@ import {
 // GPIB addresses are in range [0, 31]
 const GPIB_ADDRESS_RANGE = Array.from(Array(31).keys());
 
-const DEFAULT_MEASUREMENT_CONFIG = `{
-  "probe_gate": 8,
-  "probe_source": 1,
-  "probe_drain": 3,
-  "probe_sub": 9,
-  "v_gs": {
-      "start": -1.2,
-      "stop": 1.2,
-      "step": 0.1
-  },
-  "v_ds": [-0.05, -0.4, -1.2]
-}`;
+/**
+ * Represents a measurement program config.
+ * - name: name of the measurement program (e.g. "idvg", "idvd", etc.)
+ * - config: config object acts as json dict of parameters for the
+ *      measurement program
+ */
+class MeasurementProgram {
+    constructor(name, config) {
+        this.name = name;
+        this.config = config;
+    }
+}
 
-function App({
+/**
+ * Represents a auto probing sweep across device locations.
+ * - name: name of sweep type (e.g. "single", "array", etc.)
+ * - config: config object acts as json dict of parameters for the
+ *      sweep type
+ */
+class Sweep {
+    constructor(name, config) {
+        this.name = name;
+        this.config = config;
+    }
+}
+
+
+const App = ({
     axios, // axios instance
-}) {
+}) => {
     const [gpibB1500, setGpibB1500] = useState(16);
     const [gpibCascade, setGpibCascade] = useState(22);
     const [instrB1500Identification, setInstrB1500Identification] = useState(" ");
@@ -61,17 +75,15 @@ function App({
     const [deviceCol, setDeviceCol] = useState(0);
     const [dataFolder, setDataFolder] = useState("");
 
-    // program settings
-    const [measurementProgramList, setMeasurementProgramList] = useState([]);
-    const [measurementPrograms, setMeasurementPrograms] = useState([""]);
-    const [measurementConfigsNames, setMeasurementConfigsNames] = useState([""]); // program name for each config, == programs, but set by backend response
-    const [measurementConfigs, setMeasurementConfigs] = useState(["{}"]);
+    // measurement program settings
+    const [measurementProgramTypes, setMeasurementProgramTypes] = useState([]); // dropdown list of all measurement programs names
+    const [measurementPrograms, setMeasurementPrograms] = useState([            // list of user selected measurement programs
+        new MeasurementProgram("", "{}"), // default empty measurement program
+    ]);
 
     // sweep settings
-    const [sweepList, setSweepList] = useState([]);
-    const [sweep, setSweep] = useState("");
-    const [sweepConfigName, setSweepConfigName] = useState(""); // name of the config for the sweep, == sweep but set by backend response
-    const [sweepConfig, setSweepConfig] = useState("{}");
+    const [sweepTypes, setSweepTypes] = useState([]);
+    const [sweep, setSweep] = useState(new Sweep("", "{}")); // sweep config object
     const [sweepSaveData, setSweepSaveData] = useState(true);
     const [sweepSaveImage, setSweepSaveImage] = useState(true);
     
@@ -81,46 +93,40 @@ function App({
     // measurement status
     const [measurementRunning, setMeasurementRunning] = useState(false);
 
+    // REFS
+    const refMeasurementPrograms = useRef(measurementPrograms); // avoids stale closure when async setting measurement programs
+
     // Function to add a new program to end of programs list
     const addMeasurementProgram = () => {
         const newPrograms = [...measurementPrograms];
-        newPrograms.push("");
-        const newConfigs = [...measurementConfigs];
-        newConfigs.push("{}");
+        newPrograms.push(new MeasurementProgram("", "{}"));
+        refMeasurementPrograms.current = newPrograms;
         setMeasurementPrograms(newPrograms);
-        setMeasurementConfigs(newConfigs);
     };
 
     // Function to remove a program from the programs list
     const removeMeasurementProgram = (index) => {
         const newPrograms = [...measurementPrograms];
         newPrograms.splice(index, 1);
-        const newConfigs = [...measurementConfigs];
-        newConfigs.splice(index, 1);
+        refMeasurementPrograms.current = newPrograms;
         setMeasurementPrograms(newPrograms);
-        setMeasurementConfigs(newConfigs);
     };
 
-    // Set measurement program at index in programs
-    const setMeasurementProgramAtIndex = (index, value) => {
+    // Set measurement config value at index in user programs list
+    const setMeasurementProgramConfigAtIndex = (index, newConfig) => {
         const newPrograms = [...measurementPrograms];
-        newPrograms[index] = value;
-        console.log(index, value, newPrograms);
+        const oldProgramName = newPrograms[index].name;
+        newPrograms[index] = new MeasurementProgram(
+            oldProgramName, // keep same name
+            newConfig,      // use new config
+        );
+        refMeasurementPrograms.current = newPrograms;
         setMeasurementPrograms(newPrograms);
     };
 
-    // Set measurement config at index in configs
-    const setMeasurementConfigNameAtIndex = (index, value) => {
-        const newNames = [...measurementConfigsNames];
-        newNames[index] = value;
-        setMeasurementConfigsNames(newNames);
-    };
-
-    // Set measurement config at index in configs
-    const setMeasurementConfigAtIndex = (index, value) => {
-        const newConfigs = [...measurementConfigs];
-        newConfigs[index] = value;
-        setMeasurementConfigs(newConfigs);
+    // Set sweep config value but keep same name/type
+    const setSweepConfig = (newConfig) => {
+        setSweep(new Sweep(sweep.name, newConfig));
     };
 
     // Function to try and run a measurement.
@@ -136,6 +142,14 @@ function App({
     
     // function to run measurement
     const runMeasurement = () => {
+        // unpack measurement programs into separate array of program names and configs
+        const programs = [];
+        const programConfigs = [];
+        for (const program of measurementPrograms) {
+            programs.push(program.name);
+            programConfigs.push(program.config);
+        }
+
         // push change to server
         axios.put("api/controller", {
             msg: "run_measurement",
@@ -148,10 +162,10 @@ function App({
                 device_row: parseInt(deviceRow),
                 device_col: parseInt(deviceCol),
                 data_folder: dataFolder,
-                programs: measurementPrograms,
-                program_configs: measurementConfigs,
-                sweep: sweep,
-                sweep_config: sweepConfig,
+                programs: programs,
+                program_configs: programConfigs,
+                sweep: sweep.name,
+                sweep_config: sweep.config,
                 sweep_save_data: sweepSaveData,
                 sweep_save_image: sweepSaveImage,
             },
@@ -175,8 +189,8 @@ function App({
             setGpibB1500(response.data.gpib_b1500);
             setGpibCascade(response.data.gpib_cascade);
             setMeasurementUserList(response.data.users);
-            setMeasurementProgramList(response.data.programs);
-            setSweepList(response.data.sweeps);
+            setMeasurementProgramTypes(response.data.programs);
+            setSweepTypes(response.data.sweeps);
         }).catch(error => {
             console.log(error)
         });
@@ -209,12 +223,14 @@ function App({
             setDataFolder(settings.data_folder);
         });
         responseHandlers.set("measurement_program_config", ({name, index, config}) => {
-            setMeasurementConfigAtIndex(index, JSON.stringify(config, null, 2));
-            setMeasurementConfigNameAtIndex(index, name);
+            const newPrograms = [...refMeasurementPrograms.current];
+            const configStr = JSON.stringify(config, null, 2);
+            newPrograms[index] = new MeasurementProgram(name, configStr);
+            refMeasurementPrograms.current = newPrograms;
+            setMeasurementPrograms(newPrograms);
         });
         responseHandlers.set("measurement_sweep_config", ({name, config}) => {
-            setSweepConfig(JSON.stringify(config, null, 2));
-            setSweepConfigName(name); // set name forces code editor to re-render
+            setSweep(new Sweep(name, JSON.stringify(config, null, 2)));
         });
         responseHandlers.set("measurement_error", ({error}) => {
             console.error("Measurement failed error", error);
@@ -346,18 +362,12 @@ function App({
                         setDataFolderLocal={setDataFolder}
                         addMeasurementProgram={addMeasurementProgram}
                         removeMeasurementProgram={removeMeasurementProgram}
-                        programList={measurementProgramList}
-                        programs={measurementPrograms}
-                        setProgramAtIndex={setMeasurementProgramAtIndex}
-                        programConfigsNames={measurementConfigsNames}
-                        programConfigs={measurementConfigs}
-                        setProgramConfigAtIndex={setMeasurementConfigAtIndex}
-                        sweepList={sweepList}
+                        measurementProgramTypes={measurementProgramTypes}
+                        measurementPrograms={measurementPrograms}
+                        setMeasurementProgramConfigAtIndex={setMeasurementProgramConfigAtIndex}
+                        sweepTypes={sweepTypes}
                         sweep={sweep}
-                        setSweepLocal={setSweep}
-                        sweepConfigName={sweepConfigName}
-                        sweepConfig={sweepConfig}
-                        setSweepConfigLocal={setSweepConfig}
+                        setSweepConfig={setSweepConfig}
                         sweepSaveData={sweepSaveData}
                         setSweepSaveDataLocal={setSweepSaveData}
                         sweepSaveImage={sweepSaveImage}
@@ -381,10 +391,8 @@ function App({
                 deviceRow={deviceRow}
                 deviceCol={deviceCol}
                 dataFolder={dataFolder}
-                programs={measurementPrograms}
-                programConfigs={measurementConfigs}
+                measurementPrograms={measurementPrograms}
                 sweep={sweep}
-                sweepConfig={sweepConfig}
                 sweepSaveData={sweepSaveData}
                 sweepSaveImage={sweepSaveImage}
             />

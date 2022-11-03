@@ -28,10 +28,8 @@ export const DialogRunMeasurement = ({
     deviceRow,
     deviceCol,
     dataFolder,
-    programs,
-    programConfigs,
+    measurementPrograms,
     sweep,
-    sweepConfig,
     sweepSaveData,
     sweepSaveImage,
 }) => {
@@ -88,13 +86,13 @@ export const DialogRunMeasurement = ({
                     <Box
                         sx={{}}
                     >
-                        <b>Sweep:</b> {sweep}
+                        <b>Sweep:</b> {sweep.name}
                     </Box>
                     <Box
                         sx={{ border: "1px solid rgba(0, 0, 0, 0.3)", padding: "0px 16px"}}
                     >
                         <pre>
-                            {sweepConfig}
+                            {sweep.config}
                         </pre>
                     </Box>
 
@@ -106,25 +104,24 @@ export const DialogRunMeasurement = ({
                     >
                         <b>Programs:</b>
                     </Box>
-                    {programs.map((program, index) => (
-                        <>
-                        <Box
-                            sx={{}}
-                        >
-                            <b>{`${index+1}. ${program}`}</b> 
-                        </Box>
-                        <Box
-                            sx={{ border: "1px solid rgba(0, 0, 0, 0.3)", padding: "0px 16px"}}
-                        >
-                            <pre>
-                                {programConfigs[index]}
-                            </pre>
-                        </Box>
-                        
-                        {/* Spacer */}
-                        <Box height="20px"/>
-                        
-                        </>
+                    {measurementPrograms.map((program, index) => (
+                        <div key={index}>
+                            <Box
+                                sx={{}}
+                            >
+                                <b>{`${index+1}. ${program.name}`}</b> 
+                            </Box>
+                            <Box
+                                sx={{ border: "1px solid rgba(0, 0, 0, 0.3)", padding: "0px 16px"}}
+                            >
+                                <pre>
+                                    {program.config}
+                                </pre>
+                            </Box>
+                            
+                            {/* Spacer */}
+                            <Box height="20px"/>
+                        </div>
                     ))}
                     
                     <Box height="20px"/>

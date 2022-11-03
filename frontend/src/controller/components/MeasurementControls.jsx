@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import CodeMirror from  "@uiw/react-codemirror";
 import { json as codeMirrorJsonExtension } from "@codemirror/lang-json";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 
 const handleSetUserProfile = (axios, username, setUserLocal) => {
@@ -62,7 +62,7 @@ const handleSetUserProfile = (axios, username, setUserLocal) => {
     }
 };
 
-const handleChangeMeasurementProgram = (axios, user, index, oldProgram, oldProgramConfig, newProgram, setProgramAtIndex) => {
+const handleChangeMeasurementProgram = (axios, user, index, oldProgram, oldConfig, newProgram) => {
     if ( user === "" ) { // skip empty user
         return
     }
@@ -75,7 +75,7 @@ const handleChangeMeasurementProgram = (axios, user, index, oldProgram, oldProgr
             data: {
                 user: user,
                 program: oldProgram,
-                config: oldProgramConfig,
+                config: oldConfig,
             },
         });
     }
@@ -89,12 +89,9 @@ const handleChangeMeasurementProgram = (axios, user, index, oldProgram, oldProgr
             index: index,
         },
     });
-
-    // set program locally in app
-    setProgramAtIndex(index, newProgram);
 };
 
-const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, newSweep, setSweepLocal) => {
+const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, newSweep) => {
     if ( user === "" ) { // skip empty user
         return
     }
@@ -120,9 +117,6 @@ const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, new
             sweep: newSweep,
         },
     });
-
-    // set program locally in app
-    setSweepLocal(newSweep);
 };
 
 /**
@@ -131,20 +125,29 @@ const handleChangeMeasurementSweep = (axios, user, oldSweep, oldSweepConfig, new
  * due to element being re-rendered.
  * 
  * But because code mirror updated locally, we need another variable
- * to synchronize when program or config changes. This is the `config`
+ * to synchronize when program selected changes. This is the `name`
  * value which can be the selection title or list index. When this 
  * changes, then push external value into local value.
  */
 const SynchronizedCodeMirrorEditor = ({
-    config,   // selected program or config, for detecting when to update local value
+    name,     // selected program or config, for detecting when to update local value
     value,    // external value
     onChange,
+    debug,    // debug mode
 }) => {
     const [localVal, setLocalVal] = React.useState(value);
+
+    if ( debug ) {
+        console.log("SynchronizedCodeMirrorEditor", "name =", name, "value =", value, "localVal =", localVal);
+    }
     
     useEffect(() => {
+        if ( debug ) {
+            console.log("SynchronizedCodeMirrorEditor USE EFFECT", "name =", name, "value =", value, "localVal =", localVal);
+        }
+
         setLocalVal(value);
-    }, [config]);
+    }, [name]);
 
     return <CodeMirror
         value={localVal}
@@ -155,11 +158,16 @@ const SynchronizedCodeMirrorEditor = ({
             codeMirrorJsonExtension(),
         ]}
         onChange={(newValue, viewUpdate) => {
-            // make update synchronous, to avoid cursor jumping when the value
-            // doesn't change asynchronously 
-            setLocalVal(newValue);
-            // make the real update afterwards
-            onChange(newValue);
+            if ( debug ) {
+                console.log("SynchronizedCodeMirrorEditor.onChange:", "localVal", localVal, "newValue", newValue);
+            }
+            if ( newValue !== localVal ) {
+                // make update synchronous, to avoid cursor jumping when the value
+                // doesn't change asynchronously 
+                setLocalVal(newValue);
+                // make the real update afterwards
+                onChange(newValue);
+            }
         }}
     />
 }
@@ -174,28 +182,28 @@ export const MeasurementControls = ({
     setUserLocal,
     dataFolder,
     setDataFolderLocal,
+    // measurement program selection/config
     addMeasurementProgram,
     removeMeasurementProgram,
-    programList,
-    programs,
-    setProgramAtIndex,
-    programConfigsNames,
-    programConfigs,
-    setProgramConfigAtIndex,
-    sweepList,
+    measurementProgramTypes,
+    measurementPrograms,
+    setMeasurementProgramConfigAtIndex,
+    // sweep selection/config
+    sweepTypes,
     sweep,
-    setSweepLocal,
-    sweepConfigName,
-    sweepConfig,
-    setSweepConfigLocal,
+    setSweepConfig,
     sweepSaveData,
     setSweepSaveDataLocal,
     sweepSaveImage,
     setSweepSaveImageLocal,
+    // measurement state
     measurementRunning,
     handleRunMeasurement,
     handleCancelMeasurement,
 }) => {
+
+    // console.log("[MeasurementControls] measurementPrograms", measurementPrograms);
+    // console.log("[MeasurementControls] sweep", sweep);
 
     // required to run measurement
     const missingUserOrDataFolder = user === "" || (sweepSaveData && dataFolder === "");
@@ -208,9 +216,15 @@ export const MeasurementControls = ({
         measurementStatusText = "Missing User or Data Folder";
     }
 
-    let programMenuItems = programList.map((x) =>
+    // items in dropdown selection for measurement programs
+    let measurementProgramTypesDropdownItems = useMemo(() => measurementProgramTypes.map((x) =>
         <MenuItem key={x} value={x}>{x}</MenuItem>
-    );
+    ), [measurementProgramTypes]);
+
+    // items in dropdown selection for sweep type 
+    let sweepTypesDropdownItems = useMemo(() => sweepTypes.map((x) =>
+        <MenuItem key={x} value={x}>{x}</MenuItem>
+    ), [sweepTypes]);
 
     return (
         <Grid
@@ -275,7 +289,7 @@ export const MeasurementControls = ({
                                 >
                                     Browse
                                 </Button>
-                            </label> 
+                            </label>
                         </Grid>
                     </Grid>
                 </Box>
@@ -292,7 +306,7 @@ export const MeasurementControls = ({
                         {/* Measurement program configs */}
                         <Grid item xs={6}>
                             {/* create program selection + editor for each index */}
-                            {programs.map((program, index) =>
+                            {measurementPrograms.map((program, index) =>
                                 <Box key={index} sx={{padding: "0px 0px 16px 0px"}}>
                                     <Grid
                                         container
@@ -305,12 +319,12 @@ export const MeasurementControls = ({
                                                 <Select
                                                     id="measurement-program-select"
                                                     labelId="measurement-program-select-label"
-                                                    value={program}
+                                                    value={program.name}
                                                     label="Program"
                                                     size="small"
-                                                    onChange={(e) => handleChangeMeasurementProgram(axios, user, index, program, programConfigs[index], e.target.value, setProgramAtIndex)}
+                                                    onChange={(e) => handleChangeMeasurementProgram(axios, user, index, program.name, program.config, e.target.value)}
                                                 >
-                                                    {programMenuItems}
+                                                    {measurementProgramTypesDropdownItems}
                                                 </Select>
                                             </FormControl>
                                         </Grid>
@@ -332,7 +346,7 @@ export const MeasurementControls = ({
                                         </Grid>
                                     </Grid>
                                     {/* <CodeMirror
-                                        value={programConfigs[index]}
+                                        value={measurementConfigs[index]}
                                         theme="light"
                                         height="200px"
                                         minHeight="200px"
@@ -340,13 +354,14 @@ export const MeasurementControls = ({
                                             codeMirrorJsonExtension(),
                                         ]}
                                         onChange={(value, viewUpdate) => {
-                                            setProgramConfigAtIndex(index, value);
+                                            setMeasurementProgramConfigAtIndex(index, value);
                                         }}
                                     /> */}
                                     <SynchronizedCodeMirrorEditor
-                                        config={programConfigsNames[index]}
-                                        value={programConfigs[index]}
-                                        onChange={(val) => setProgramConfigAtIndex(index, val)}
+                                        name={program.name}
+                                        value={program.config}
+                                        onChange={(val) => setMeasurementProgramConfigAtIndex(index, val)}
+                                        debug={false}
                                     />
                                 </Box>
                             )}
@@ -368,14 +383,12 @@ export const MeasurementControls = ({
                                     <Select
                                         id="measurement-sweep-select"
                                         labelId="measurement-sweep-select-label"
-                                        value={sweep}
+                                        value={sweep.name}
                                         label="Sweep"
                                         size="small"
-                                        onChange={(e) => handleChangeMeasurementSweep(axios, user, sweep, sweepConfig, e.target.value, setSweepLocal)}
+                                        onChange={(e) => handleChangeMeasurementSweep(axios, user, sweep.name, sweep.config, e.target.value)}
                                     >
-                                        {sweepList.map((x) =>
-                                            <MenuItem key={x} value={x}>{x}</MenuItem>
-                                        )}
+                                        {sweepTypesDropdownItems}
                                     </Select>
                                 </FormControl>
                                 {/* <CodeMirror
@@ -391,9 +404,9 @@ export const MeasurementControls = ({
                                     }}
                                 /> */}
                                 <SynchronizedCodeMirrorEditor
-                                    config={sweepConfigName}
-                                    value={sweepConfig}
-                                    onChange={(val) => setSweepConfigLocal(val)}
+                                    name={sweep.name}
+                                    value={sweep.config}
+                                    onChange={(val) => setSweepConfig(val)}
                                 />
                                 
                                 {/* Start measurement button and save data configs */}
