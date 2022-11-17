@@ -18,7 +18,7 @@ renderPrograms.set("keysight_rram_1t1r_sequence", ProgramRram1T1R);
 const Monitor = () => {
     let [render, setRender] = useState((<>Waiting for result..</>));
     let [datasets, setDatasets] = useState(new Map());
-    let [append, setAppend] = useState(true); // append = whether to keep same plot data and plot new incoming data
+    let [append, setAppend] = useState(false); // append = whether to keep same plot data and plot new incoming data
     let [currProgramType, setCurrProgramType] = useState("");
 
     // When we get data from running the same program type, we may want

@@ -14,37 +14,13 @@ import { colormap, colorTo255Range, colorBrighten } from "../util.js";
 
 export const ProgramRram1T1R = ({
     metadata,
-    data,
+    datasets,
 }) => {
     console.log("RENDERING ProgramRram1T1R");
     console.log(metadata);
-    console.log(data);
+    console.log(datasets);
 
     const measurementConfigString = JSON.stringify(metadata.config, null, 2);
-
-    // Rram measurement data format contains padded arrays:
-    // v_d sequences = 
-    //      FORM  [0,   1,   2,   3,   4]
-    //      RESET [0,  -1,  -2,  -3, nan]
-    //      SET   [0,   1,   2, nan, nan]
-    //      RESET [0,  -1,  -2,  -3, nan]
-    //      SET   [0,   1,   2, nan, nan]
-    //      RESET [0,  -1,  -2,  -3, nan]
-    // 
-    // Overall rram data block shape is:
-    //      (num_sequences, num_directions, num_points_max)
-    // for run-time updates, `num_sequences = metadata.step` which is number of
-    // steps that have completed. 
-    const numSequences = metadata.step !== undefined ? metadata.step : data.v_d.length;
-    const numDirections = data.v_d[0].length;
-    const numPointsMax = data.v_d[0][0].length;
-
-    // this gives step name and num points for each sequence,
-    // e.g. numPoints[0] = number of points for measurement sequence 1
-    const sequenceNumPoints = data.num_points;
-    const sequenceStepNames = data.step_names;
-
-    console.log(`numSequences=${numSequences}, numDirections=${numDirections}, numPointsMax=${numPointsMax}`);
 
     // plot traces
     const tracesIdVd = [];  // id vs vd
@@ -57,64 +33,95 @@ export const ProgramRram1T1R = ({
     const idMinList = [];
     const igMaxList = [];
 
-    for ( let s = 0; s < numSequences; s++ ) {
-        // number of points for this sequence
-        const n = sequenceNumPoints[s];
+    let sequenceStepNames = undefined; 
 
-        // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
-        const colBase = colorTo255Range(colormap(s, -1, numSequences));
+    for ( const dataset of datasets.values() ) {
+        const datasetMetadata = dataset.metadata;
+        const data = dataset.data;
 
-        for ( let d = 0; d < numDirections; d++ ) {
-            // make additional sweeps brighter for visibility
-            const col = colorBrighten(colBase, 0.6 + (d * 0.4));
+        // Rram measurement data format contains padded arrays:
+        // v_d sequences = 
+        //      FORM  [0,   1,   2,   3,   4]
+        //      RESET [0,  -1,  -2,  -3, nan]
+        //      SET   [0,   1,   2, nan, nan]
+        //      RESET [0,  -1,  -2,  -3, nan]
+        //      SET   [0,   1,   2, nan, nan]
+        //      RESET [0,  -1,  -2,  -3, nan]
+        // 
+        // Overall rram data block shape is:
+        //      (num_sequences, num_directions, num_points_max)
+        // for run-time updates, `num_sequences = datasetMetadata.step` which is number of
+        // steps that have completed. 
+        const numSequences = datasetMetadata.step !== undefined ? datasetMetadata.step : data.v_d.length;
+        const numDirections = data.v_d[0].length;
+        const numPointsMax = data.v_d[0][0].length;
 
-            // unpack data
-            const vs = data.v_s[s][d][0]; // const
-            const vd = data.v_d[s][d].slice(0, n);
-            const vg = data.v_g[s][d].slice(0, n);
-            const id = data.i_d_abs[s][d].slice(0, n);
-            const ig = data.i_g_abs[s][d].slice(0, n);
-            const res = data.res[s][d].slice(0, n);
+        // this gives step name and num points for each sequence,
+        // e.g. numPoints[0] = number of points for measurement sequence 1
+        const sequenceNumPoints = data.num_points;
+        sequenceStepNames = data.step_names.slice(0, numSequences);
 
-            // key performance metrics (only do for first sweep):
-            // find max/min id and max ig in range
-            if ( d === 0 ) {
-                const idMax = Math.max(...id);
-                const idMin = Math.min(...id);
-                const igMax = Math.max(...ig);
-                resList.push(res[n-1].toExponential(2));
-                idMaxList.push(idMax.toExponential(2));
-                idMinList.push(idMin.toExponential(2));
-                igMaxList.push(igMax.toExponential(2));
+        console.log(`numSequences=${numSequences}, numDirections=${numDirections}, numPointsMax=${numPointsMax}`);
+
+        for ( let s = 0; s < numSequences; s++ ) {
+            // number of points for this sequence
+            const n = sequenceNumPoints[s];
+
+            // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
+            const colBase = colorTo255Range(colormap(s, -1, numSequences));
+
+            for ( let d = 0; d < numDirections; d++ ) {
+                // make additional sweeps brighter for visibility
+                const col = colorBrighten(colBase, 0.6 + (d * 0.4));
+
+                // unpack data
+                const vs = data.v_s[s][d][0]; // const
+                const vd = data.v_d[s][d].slice(0, n);
+                const vg = data.v_g[s][d].slice(0, n);
+                const id = data.i_d_abs[s][d].slice(0, n);
+                const ig = data.i_g_abs[s][d].slice(0, n);
+                const res = data.res[s][d].slice(0, n);
+
+                // key performance metrics (only do for first sweep):
+                // find max/min id and max ig in range
+                if ( d === 0 ) {
+                    const idMax = Math.max(...id);
+                    const idMin = Math.min(...id);
+                    const igMax = Math.max(...ig);
+                    resList.push(res[n-1].toExponential(2));
+                    idMaxList.push(idMax.toExponential(2));
+                    idMinList.push(idMin.toExponential(2));
+                    igMaxList.push(igMax.toExponential(2));
+                }
+
+                // create plot traces
+                tracesIdVd.push({
+                    name: `${sequenceStepNames[s]}, dir=${d}`,
+                    x: vd,
+                    y: id,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
+
+                tracesResVd.push({
+                    name: `${sequenceStepNames[s]}, dir=${d}`,
+                    x: vd,
+                    y: res,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
+                
+                tracesIgVd.push({
+                    name: `${sequenceStepNames[s]}, dir=${d}`,
+                    x: vd,
+                    y: ig,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
             }
-
-            // create plot traces
-            tracesIdVd.push({
-                name: `${sequenceStepNames[s]}, dir=${d}`,
-                x: vd,
-                y: id,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
-
-            tracesResVd.push({
-                name: `${sequenceStepNames[s]}, dir=${d}`,
-                x: vd,
-                y: res,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
-            
-            tracesIgVd.push({
-                name: `${sequenceStepNames[s]}, dir=${d}`,
-                x: vd,
-                y: ig,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
         }
     }
 
