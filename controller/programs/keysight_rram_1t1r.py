@@ -165,9 +165,9 @@ def _query_error(instr_b1500, stop_on_error=True):
 def measurement_keysight_b1500_setup(
     instr_b1500,
     query_error,
-    probe_gate: int,
-    probe_source: int,
-    probe_drain: int,
+    probe_wl: int,
+    probe_sl: int,
+    probe_bl: int,
     probe_sub: int,
     id_compliance: float,
     ig_compliance: float,
@@ -177,7 +177,7 @@ def measurement_keysight_b1500_setup(
     """
 
     # enable channels: CN (pg 4-62)
-    instr_b1500.write(f"CN {probe_sub},{probe_gate},{probe_drain},{probe_source}")
+    instr_b1500.write(f"CN {probe_sub},{probe_wl},{probe_bl},{probe_sl}")
     query_error(instr_b1500)
 
     instr_b1500.write("FMT 1,1") # clear data buffer and set format (4-24, 4-25)
@@ -194,9 +194,9 @@ def measurement_keysight_b1500_setup(
     ADC_TYPE_HIRES = 1
     ADC_TYPE_PULSE = 2
     adc_type = ADC_TYPE_HISPEED
-    instr_b1500.write(f"AAD {probe_drain},{adc_type}")
-    instr_b1500.write(f"AAD {probe_source},{adc_type}")
-    instr_b1500.write(f"AAD {probe_gate},{adc_type}")
+    instr_b1500.write(f"AAD {probe_bl},{adc_type}")
+    instr_b1500.write(f"AAD {probe_sl},{adc_type}")
+    instr_b1500.write(f"AAD {probe_wl},{adc_type}")
     instr_b1500.write(f"AAD {probe_sub},{adc_type}")
     query_error(instr_b1500)
 
@@ -229,16 +229,16 @@ def measurement_keysight_b1500_setup(
 
     # zero voltage to probes, DV (pg 4-78) cmd sets DC voltage on channels:
     #   DV {probe},{vrange},{v},{icompliance}
-    instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
+    instr_b1500.write(f"DV {probe_wl},0,0,{ig_compliance}")
     instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
-    instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
-    instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
+    instr_b1500.write(f"DV {probe_bl},0,0,{id_compliance}")
+    instr_b1500.write(f"DV {probe_sl},0,0,{id_compliance}")
     query_error(instr_b1500)
 
     # set measurement mode to multi-channel staircase sweep (MODE = 16) (4-151, pg 471):
     #   MM mode,ch0,ch1,ch2,...
     mm_mode = 16
-    instr_b1500.write(f"MM {mm_mode},{probe_drain},{probe_source},{probe_gate}");
+    instr_b1500.write(f"MM {mm_mode},{probe_bl},{probe_sl},{probe_wl}");
     query_error(instr_b1500)
 
     # set probe current measurement mode (4-62, pg 382):
@@ -249,9 +249,9 @@ def measurement_keysight_b1500_setup(
     CMM_MODE_FORCE = 3
     CMM_MODE_SYNC = 4
     cmm_mode = CMM_MODE_CURRENT
-    instr_b1500.write(f"CMM {probe_drain},{cmm_mode}")
-    instr_b1500.write(f"CMM {probe_source},{cmm_mode}")
-    instr_b1500.write(f"CMM {probe_gate},{cmm_mode}")
+    instr_b1500.write(f"CMM {probe_bl},{cmm_mode}")
+    instr_b1500.write(f"CMM {probe_sl},{cmm_mode}")
+    instr_b1500.write(f"CMM {probe_wl},{cmm_mode}")
     query_error(instr_b1500)
 
     # set auto-ranging (4-183 pg 503, page 339 for modes)
@@ -264,9 +264,9 @@ def measurement_keysight_b1500_setup(
     RANGE_MODE_1UA = 14      # 1 uA limited auto
     RANGE_MODE_1MA = 17      # 1 mA limited auto
     range_mode = RANGE_MODE_1NA
-    instr_b1500.write(f"RI {probe_source},{range_mode}")
-    instr_b1500.write(f"RI {probe_drain},{range_mode}")
-    instr_b1500.write(f"RI {probe_gate},{range_mode}")
+    instr_b1500.write(f"RI {probe_sl},{range_mode}")
+    instr_b1500.write(f"RI {probe_bl},{range_mode}")
+    instr_b1500.write(f"RI {probe_wl},{range_mode}")
     query_error(instr_b1500)
 
     # set hold time, delay time, and step delay time for the staircase sweep or
@@ -340,9 +340,9 @@ def run_rram_1t1r_sweeps(
     signal_cancel,
     sweep_metadata,
     query_error,
-    probe_gate: int,
-    probe_source: int,
-    probe_drain: int,
+    probe_wl: int,
+    probe_sl: int,
+    probe_bl: int,
     probe_sub: int,
     id_compliance: float,           # drain current compliance
     ig_compliance: float,           # gate current compliance
@@ -384,7 +384,7 @@ def run_rram_1t1r_sweeps(
         # write voltage staircase waveform
         wv_range_mode = 0 # AUTO
         wv_cmd = SweepType.FORWARD_REVERSE.b1500_wv_sweep_command(
-            ch=probe_drain,
+            ch=probe_bl,
             range=wv_range_mode,
             start=v_d_sweep[0],
             stop=v_d_sweep[-1],
@@ -401,11 +401,11 @@ def run_rram_1t1r_sweeps(
         query_error(instr_b1500)
         
         # write source bias
-        instr_b1500.write(f"DV {probe_source},0,{v_s},{id_compliance}")
+        instr_b1500.write(f"DV {probe_sl},0,{v_s},{id_compliance}")
         query_error(instr_b1500)
 
         # write gate bias
-        instr_b1500.write(f"DV {probe_gate},0,{v_g},{ig_compliance}")
+        instr_b1500.write(f"DV {probe_wl},0,{v_g},{ig_compliance}")
         query_error(instr_b1500)
 
         # execute and wait for data response
@@ -432,10 +432,10 @@ def run_rram_1t1r_sweeps(
         t_run_avg = max(0, exp_moving_avg_with_init(t_run_avg, t_run, alpha=0.2, init_alpha=0.9))
 
         # zero probes after measurement
-        instr_b1500.write(f"DV {probe_gate},0,0,{ig_compliance}")
+        instr_b1500.write(f"DV {probe_wl},0,0,{ig_compliance}")
         instr_b1500.write(f"DV {probe_sub},0,0,{id_compliance}")
-        instr_b1500.write(f"DV {probe_drain},0,0,{id_compliance}")
-        instr_b1500.write(f"DV {probe_source},0,0,{id_compliance}")
+        instr_b1500.write(f"DV {probe_bl},0,0,{id_compliance}")
+        instr_b1500.write(f"DV {probe_sl},0,0,{id_compliance}")
         query_error(instr_b1500)
         
         # number of bytes in output data buffer
@@ -568,9 +568,9 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         Note: values based on a BE device with PMOS access.
         """
         return {
-            "probe_gate": 1,
-            "probe_source": 4,
-            "probe_drain": 8,
+            "probe_wl": 1,
+            "probe_sl": 4,
+            "probe_bl": 8,
             "probe_sub": 9,
             "v_sub": 0,
             "v_s_form": 0.0,
@@ -594,9 +594,9 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         monitor_channel: EventChannel = None,
         signal_cancel = None,
         sweep_metadata: dict = {},
-        probe_gate=1,
-        probe_source=4,
-        probe_drain=8,
+        probe_wl=1,
+        probe_sl=4,
+        probe_bl=8,
         probe_sub=9,
         v_sub=0.0,                # substrate voltage, constant
         v_s_form=0.0,             # form source voltage, const
@@ -619,9 +619,9 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         **kwargs,
     ) -> MeasurementResult:
         """Run the program."""
-        print(f"probe_gate = {probe_gate}")
-        print(f"probe_source = {probe_source}")
-        print(f"probe_drain = {probe_drain}")
+        print(f"probe_wl = {probe_wl}")
+        print(f"probe_sl = {probe_sl}")
+        print(f"probe_bl = {probe_bl}")
         print(f"probe_sub = {probe_sub}")
         print(f"v_sub = {v_sub}")
         print(f"v_s_form = {v_s_form}")
@@ -643,14 +643,14 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         
         # map smu probes to instrument slots
         if len(smu_slots) > 0:
-            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
-            probe_source = map_smu_to_slot(smu_slots, probe_source)
-            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_wl = map_smu_to_slot(smu_slots, probe_wl)
+            probe_sl = map_smu_to_slot(smu_slots, probe_sl)
+            probe_bl = map_smu_to_slot(smu_slots, probe_bl)
             probe_sub = map_smu_to_slot(smu_slots, probe_sub)
             logging.info("Mapped SMU to slot:")
-            logging.info(f"- probe_gate -> {probe_gate}")
-            logging.info(f"- probe_source -> {probe_source}")
-            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_wl -> {probe_wl}")
+            logging.info(f"- probe_sl -> {probe_sl}")
+            logging.info(f"- probe_bl -> {probe_bl}")
             logging.info(f"- probe_sub -> {probe_sub}")
 
         # error check function, closure wrapper with fixed `stop_on_error`` input
@@ -704,9 +704,9 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
         measurement_keysight_b1500_setup(
             instr_b1500=instr_b1500,
             query_error=query_error,
-            probe_gate=probe_gate,
-            probe_source=probe_source,
-            probe_drain=probe_drain,
+            probe_wl=probe_wl,
+            probe_sl=probe_sl,
+            probe_bl=probe_bl,
             probe_sub=probe_sub,
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
@@ -720,9 +720,9 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
             signal_cancel=signal_cancel,
             sweep_metadata=sweep_metadata,
             query_error=query_error,
-            probe_gate=probe_gate,
-            probe_source=probe_source,
-            probe_drain=probe_drain,
+            probe_wl=probe_wl,
+            probe_sl=probe_sl,
+            probe_bl=probe_bl,
             probe_sub=probe_sub,
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
@@ -835,9 +835,9 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
     def default_config():
         """Return default `run` arguments config as a dict."""
         return {
-            "probe_gate": 1,
-            "probe_source": 4,
-            "probe_drain": 8,
+            "probe_wl": 1,
+            "probe_sl": 4,
+            "probe_bl": 8,
             "probe_sub": 9,
             "v_sub": 0.0,
             "v_s": 0.0,
@@ -853,9 +853,9 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         monitor_channel: EventChannel = None,
         signal_cancel = None,
         sweep_metadata: dict = {},
-        probe_gate=1,
-        probe_source=4,
-        probe_drain=8,
+        probe_wl=1,
+        probe_sl=4,
+        probe_bl=8,
         probe_sub=9,
         v_sub=0.0,                 # substrate voltage, constant
         v_s=0.0,                   # source voltage, constant
@@ -872,9 +872,9 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         **kwargs,
     ) -> MeasurementResult:
         """Run the program."""
-        print(f"probe_gate = {probe_gate}")
-        print(f"probe_source = {probe_source}")
-        print(f"probe_drain = {probe_drain}")
+        print(f"probe_wl = {probe_wl}")
+        print(f"probe_sl = {probe_sl}")
+        print(f"probe_bl = {probe_bl}")
         print(f"probe_sub = {probe_sub}")
         print(f"v_sub = {v_sub}")
         print(f"v_sub = {v_s}")
@@ -890,14 +890,14 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         
         # map smu probes to instrument slots
         if len(smu_slots) > 0:
-            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
-            probe_source = map_smu_to_slot(smu_slots, probe_source)
-            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_wl = map_smu_to_slot(smu_slots, probe_wl)
+            probe_sl = map_smu_to_slot(smu_slots, probe_sl)
+            probe_bl = map_smu_to_slot(smu_slots, probe_bl)
             probe_sub = map_smu_to_slot(smu_slots, probe_sub)
             logging.info("Mapped SMU to slot:")
-            logging.info(f"- probe_gate -> {probe_gate}")
-            logging.info(f"- probe_source -> {probe_source}")
-            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_wl -> {probe_wl}")
+            logging.info(f"- probe_sl -> {probe_sl}")
+            logging.info(f"- probe_bl -> {probe_bl}")
             logging.info(f"- probe_sub -> {probe_sub}")
 
         # error check function, closure wrapper with fixed `stop_on_error`` input
@@ -940,9 +940,9 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         measurement_keysight_b1500_setup(
             instr_b1500=instr_b1500,
             query_error=query_error,
-            probe_gate=probe_gate,
-            probe_source=probe_source,
-            probe_drain=probe_drain,
+            probe_wl=probe_wl,
+            probe_sl=probe_sl,
+            probe_bl=probe_bl,
             probe_sub=probe_sub,
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
@@ -956,9 +956,9 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
             signal_cancel=signal_cancel,
             sweep_metadata=sweep_metadata,
             query_error=query_error,
-            probe_gate=probe_gate,
-            probe_source=probe_source,
-            probe_drain=probe_drain,
+            probe_wl=probe_wl,
+            probe_sl=probe_sl,
+            probe_bl=probe_bl,
             probe_sub=probe_sub,
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
@@ -1028,13 +1028,13 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         # parse each code into a sweep config
         code_bias_configs = {}
         for code_name, voltages in codes.items():
-            if len(voltages) != 4:
-                raise ValueError(f"Invalid code {code_name} voltage sequence: {voltages}, must be [v_sub, v_s, v_d, v_g]")
+            if "v_sub" not in voltages or "v_sl" not in voltages or "v_wl" not in voltages or "v_bl" not in voltages:
+                raise ValueError(f"Invalid code {code_name} voltage sequence: {voltages}, must be dict containing v_sub, v_sl, v_wl, v_bl")
 
-            v_sub = voltages[0]
-            v_s = voltages[1]
-            v_d = voltages[2]
-            v_g = voltages[3]
+            v_sub = voltages["v_sub"]
+            v_s = voltages["v_sl"]
+            v_d = voltages["v_bl"]
+            v_g = voltages["v_wl"]
             
             code_bias_configs[code_name] = RramSweepConfig(
                 name=code_name,
@@ -1060,16 +1060,16 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
     def default_config():
         """Return default `run` arguments config as a dict."""
         return {
-            "probe_gate": 1,
-            "probe_source": 4,
-            "probe_drain": 8,
+            "probe_wl": 1,
+            "probe_bl": 4,
+            "probe_sl": 8,
             "probe_sub": 9,
-            "codes": { # format must be [v_sub, v_s, v_d, v_g]
-                "reset": [0.0, 0.0, -1.0, 0.5],
-                "read": [0.0, 0.0, 0.5, 0.5],
-                "set1": [0.0, 0.0, 2.0, 0.5],
-                "set2": [0.0, 0.0, 2.5, 0.5],
-                "set3": [0.0, 0.0, 3.0, 0.5],
+            "codes": {
+                "reset": {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": -3.0},
+                "read":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 0.5},
+                "set1":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.0},
+                "set2":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.5},
+                "set3":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 3.0},
             },
             "sequence": [
                 "reset",  # bit = 0
@@ -1094,16 +1094,16 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         sweep_metadata: dict = {},
         path_data_folder="",
         path_save_dir="",
-        probe_gate=1,
-        probe_source=4,
-        probe_drain=8,
+        probe_wl=1,
+        probe_sl=4,
+        probe_bl=8,
         probe_sub=9,
-        codes={ # format must be [v_sub, v_s, v_d, v_g]
-            "reset": [0.0, 0.0, -1.0, 0.5],
-            "read": [0.0, 0.0, 0.5, 0.5],
-            "set1": [0.0, 0.0, 2.0, 0.5],
-            "set2": [0.0, 0.0, 2.5, 0.5],
-            "set3": [0.0, 0.0, 3.0, 0.5],
+        codes={
+            "reset": {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": -3.0},
+            "read":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 0.5},
+            "set1":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.0},
+            "set2":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.5},
+            "set3":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 3.0},
         },
         sequence=[
             "reset",  # bit = 0
@@ -1129,9 +1129,9 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         **kwargs,
     ) -> MeasurementResult:
         """Run the program."""
-        print(f"probe_gate = {probe_gate}")
-        print(f"probe_source = {probe_source}")
-        print(f"probe_drain = {probe_drain}")
+        print(f"probe_wl = {probe_wl}")
+        print(f"probe_sl = {probe_sl}")
+        print(f"probe_bl = {probe_bl}")
         print(f"probe_sub = {probe_sub}")
         print(f"codes = {codes}")
         print(f"sequence = {sequence}")
@@ -1144,14 +1144,14 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         
         # map smu probes to instrument slots
         if len(smu_slots) > 0:
-            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
-            probe_source = map_smu_to_slot(smu_slots, probe_source)
-            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_wl = map_smu_to_slot(smu_slots, probe_wl)
+            probe_sl = map_smu_to_slot(smu_slots, probe_sl)
+            probe_bl = map_smu_to_slot(smu_slots, probe_bl)
             probe_sub = map_smu_to_slot(smu_slots, probe_sub)
             logging.info("Mapped SMU to slot:")
-            logging.info(f"- probe_gate -> {probe_gate}")
-            logging.info(f"- probe_source -> {probe_source}")
-            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_wl -> {probe_wl}")
+            logging.info(f"- probe_sl -> {probe_sl}")
+            logging.info(f"- probe_bl -> {probe_bl}")
             logging.info(f"- probe_sub -> {probe_sub}")
 
         # error check function, closure wrapper with fixed `stop_on_error`` input
@@ -1162,19 +1162,19 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         bias_configs, num_points_max = ProgramKeysightRram1T1RSequence.parse_sweep_sequence(
             codes=codes,
             sequence=sequence,
-            v_step=0.1,
+            v_step=v_step,
         )
         num_sequences = len(bias_configs)
         num_points_sequence = [ x.num_points for x in bias_configs ]
         step_names = [ x.name for x in bias_configs ]
 
         # measurement compliance settings
-        v_d_max = 0
+        v_max = 0
         for k, v in codes.items():
-            v_d_max = max(v_d_max, v[2])
+            v_max = max(v_max, abs(v["v_sl"]), abs(v["v_wl"]), abs(v["v_bl"]))
         id_compliance = 0.100 # 100 mA complience
         ig_compliance = 0.010 # 10 mA complience
-        pow_compliance = abs(id_compliance * np.max(v_d_max)) # power compliance [W]
+        pow_compliance = abs(id_compliance * np.max(v_max)) # power compliance [W]
 
         # reset instrument
         instr_b1500.write("*RST")
@@ -1183,9 +1183,9 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         measurement_keysight_b1500_setup(
             instr_b1500=instr_b1500,
             query_error=query_error,
-            probe_gate=probe_gate,
-            probe_source=probe_source,
-            probe_drain=probe_drain,
+            probe_wl=probe_wl,
+            probe_sl=probe_sl,
+            probe_bl=probe_bl,
             probe_sub=probe_sub,
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
@@ -1207,9 +1207,9 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
                 signal_cancel=signal_cancel,
                 sweep_metadata=sweep_metadata,
                 query_error=query_error,
-                probe_gate=probe_gate,
-                probe_source=probe_source,
-                probe_drain=probe_drain,
+                probe_wl=probe_wl,
+                probe_sl=probe_sl,
+                probe_bl=probe_bl,
                 probe_sub=probe_sub,
                 id_compliance=id_compliance,
                 ig_compliance=ig_compliance,
@@ -1295,9 +1295,9 @@ class ProgramKeysightRram1T1RPulsedForm(MeasurementProgram):
     def default_config():
         """Return default `run` arguments config as a dict."""
         return {
-            "probe_gate": 1,
-            "probe_source": 4,
-            "probe_drain": 8,
+            "probe_wl": 1,
+            "probe_sl": 4,
+            "probe_bl": 8,
             "probe_sub": 9,
             "v_sub": 0,
             "v_s_form": 0.0,
@@ -1317,9 +1317,9 @@ class ProgramKeysightRram1T1RPulsedForm(MeasurementProgram):
         sweep_metadata: dict = {},
         path_data_folder="",
         path_save_dir="",
-        probe_gate=1,
-        probe_source=4,
-        probe_drain=8,
+        probe_wl=1,
+        probe_sl=4,
+        probe_bl=8,
         probe_sub=9,
         v_sub=0.0,
         v_s_form=0.0,
@@ -1343,14 +1343,14 @@ class ProgramKeysightRram1T1RPulsedForm(MeasurementProgram):
         
         # map smu probes to instrument slots
         if len(smu_slots) > 0:
-            probe_gate = map_smu_to_slot(smu_slots, probe_gate)
-            probe_source = map_smu_to_slot(smu_slots, probe_source)
-            probe_drain = map_smu_to_slot(smu_slots, probe_drain)
+            probe_wl = map_smu_to_slot(smu_slots, probe_wl)
+            probe_sl = map_smu_to_slot(smu_slots, probe_sl)
+            probe_bl = map_smu_to_slot(smu_slots, probe_bl)
             probe_sub = map_smu_to_slot(smu_slots, probe_sub)
             logging.info("Mapped SMU to slot:")
-            logging.info(f"- probe_gate -> {probe_gate}")
-            logging.info(f"- probe_source -> {probe_source}")
-            logging.info(f"- probe_drain -> {probe_drain}")
+            logging.info(f"- probe_wl -> {probe_wl}")
+            logging.info(f"- probe_sl -> {probe_sl}")
+            logging.info(f"- probe_bl -> {probe_bl}")
             logging.info(f"- probe_sub -> {probe_sub}")
 
         # error check function, closure wrapper with fixed `stop_on_error`` input
@@ -1415,9 +1415,9 @@ if __name__ == "__main__":
         try:
             result = ProgramKeysightRram1T1R.run(
                 instr_b1500=instr_b1500,
-                probe_gate=1,
-                probe_source=4,
-                probe_drain=8,
+                probe_wl=1,
+                probe_sl=4,
+                probe_bl=8,
                 v_d_form=2.0,
                 v_d_set=1.5,
                 v_d_reset=-2.0,
