@@ -988,12 +988,12 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
     will need to manually do a forming step on the 1T1R first.
 
     Sweep sequence example:
-    codes = { # format must be [v_s, v_d, v_g]
-        "reset": [0.0, -1.0, 0.5],
-        "read": [0.0, 0.5, 0.5],
-        "set1": [0.0, 2.0, 0.5],
-        "set2": [0.0, 2.5, 0.5],
-        "set3": [0.0, 3.0, 0.5],
+    codes = {
+        "reset": {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": -3.0},
+        "read":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 0.5},
+        "set1":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.0},
+        "set2":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.5},
+        "set3":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 3.0},
     }
     sequence = [
         "reset",  # bit = 0
