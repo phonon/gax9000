@@ -22,3 +22,7 @@ debug
 # scripts data files
 scripts/**/*.h5
 scripts/**/*.mat
+scripts/data/*
+!scripts/data/meta.json
+scripts/test/*
+!scripts/test/.gitkeep
