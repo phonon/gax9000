@@ -195,14 +195,131 @@ def move_image_from_remote_when_ready(
             time.sleep(poll_timeout)
 
 
+def stitch_images(
+    config: dict,
+    path_out: str,
+    count_x: int = None,     # number of images on x-axis, None -> autosearch
+    count_y: int = None,     # number of images on y axis, None -> autosearch
+    margin: float = 0.2,     # margin on each side that is ignored
+    downsample: int = 2.0,   # downsampling factor for images
+    contrast: float = 0.75,  # contrast filtering, helps reduces lighting discontinuity at edge
+    format: str = "png",
+    show_image: bool = True, # display output image in system image viewer after stitching
+):
+    """Routine to stitch together a folder of raw images into a single die 
+    photo panorama. Each image is as follows:
+
+                ignored outer region
+         _____________v____
+        |   ____________   |       The border area ignored is the "margin"
+        |  |            |  |       input parameter, which is subtracted from
+        |  |  use this  |  |       each edge.
+        |  |____________|  |
+        |__________________|
+    
+    Each image has outer margin we ignore. This is because images taken have 
+    shadowing near borders that causes lighting discontinuities between
+    images. What we do:
+    1. Calculate merged image size after including downsampling.
+    2. Create output merged image buffer.
+    3. Foreach image:
+        3.1. Downsample (before cropping to reduce aliasing at edges)
+        3.2. Crop center region
+        3.3. Insert into correct coordinates in output img buffer.
+    
+    Downsampling then stitching will introduce 
+    If input count_x or count_y are None, this must search raw image folder
+    to find number of images along each axis.
+    """
+    from math import floor, ceil
+    from PIL import Image, ImageEnhance
+
+    # generate a folder for this run
+    path_raw_images = os.path.join(path_out, "raw")
+    if not os.path.exists(path_raw_images):
+        raise ValueError(f"No raw images to stitch in path {path_raw_images}")
+
+    # if count not specified, search through images to find images taken 
+    # on each axis
+    if count_x is None or count_y is None:
+        print(f"count_x or count_y not specified...searching for images in {path_raw_images}...")
+        count_x = 0
+        count_y = 0
+        for p in os.listdir(path_raw_images):
+            if p.endswith("_raw.png"):
+                s_chunks = p.split("_")
+                count_x = max(count_x, int(s_chunks[0]))
+                count_y = max(count_y, int(s_chunks[1]))
+        # add 1 to get actual array size
+        count_x += 1
+        count_y += 1
+        print(f"Found count = ({count_x}, {count_y})")
+
+    # calculate um actually used per image. insert margin in images,
+    # e.g. stitch with margin overlap between images on each border
+    raw_img_margin_x = round(margin * config["img_size_x"])
+    raw_img_margin_y = round(margin * config["img_size_y"])
+
+    raw_img_chunk_size_x_px = round(config["img_size_x"] - 2*raw_img_margin_x)
+    raw_img_chunk_size_y_px = round(config["img_size_y"] - 2*raw_img_margin_y)
+
+    downsampled_img_full_size_x_px = round(float(config["img_size_x"]) / downsample)
+    downsampled_img_full_size_y_px = round(float(config["img_size_y"]) / downsample)
+
+    downsampled_img_chunk_size_x_px = round(float(raw_img_chunk_size_x_px) / downsample)
+    downsampled_img_chunk_size_y_px = round(float(raw_img_chunk_size_y_px) / downsample)
+
+    # crop area for each downsampled image, (left, upper, right, lower)
+    # on each edge, remove margin of size downsampled_img_margin_x and
+    # downsampled_img_margin_y
+    # adding 1 to downsample margin seems to improve image stitching...wtf?
+    downsampled_img_margin_x =  1 + round(float(raw_img_margin_x) / downsample)
+    downsampled_img_margin_y =  1 + round(float(raw_img_margin_y) / downsample)
+    croparea = (
+        downsampled_img_margin_x,
+        downsampled_img_margin_y,
+        downsampled_img_margin_x + downsampled_img_chunk_size_x_px,
+        downsampled_img_margin_y + downsampled_img_chunk_size_y_px,
+    )
+
+    # print(croparea)
+
+    # stitch images together starting from top-left
+    img = Image.new(mode="RGB", size=(count_x * downsampled_img_chunk_size_x_px, count_y * downsampled_img_chunk_size_y_px))
+    # print(img)
+
+    for nx in range(count_x):
+        for ny in range(count_y):
+            path_img_chunk = os.path.join(path_raw_images, f"{nx}_{ny}_raw.png")
+            img_chunk = Image.open(path_img_chunk)
+            img_chunk = img_chunk.resize((downsampled_img_full_size_x_px, downsampled_img_full_size_y_px), resample=Image.Resampling.BILINEAR)
+            img_chunk = img_chunk.crop(croparea)
+
+            # TODO: make contrast an input parameter
+            filter_contrast = ImageEnhance.Contrast(img_chunk)
+            img_chunk = filter_contrast.enhance(contrast)
+
+            x0 = nx * downsampled_img_chunk_size_x_px
+            y0 = ny * downsampled_img_chunk_size_y_px
+            img.paste(img_chunk, box=(x0, y0))
+    
+    path_img_combined_out = os.path.join(path_out, "die_photo.png")
+    img.save(path_img_combined_out)
+
+    print(f"Saved stitched image to: {path_img_combined_out}")
+
+    if show_image:
+        img.show()
+
+
 def take_die_photo(
     config: dict,
     zoom: str,
     size_x: int,
     size_y: int,
     path_out: str,
-    margin: float = 0.2,  # margin on each side that is ignored
-    downsample: int = 2,  # downsampling ratio for images
+    margin: float = 0.2,    # margin on each side that is ignored
+    downsample: int = 2.0,  # downsampling factor for images
     format: str = "png",
 ):
     """Do a sweep to get a die photo over input x, y size range.
@@ -225,15 +342,12 @@ def take_die_photo(
         |__________________|
     """
     from math import ceil
-    from PIL import Image, ImageEnhance
-
-    controller = SimpleCascadeController(config["gpib_address"])
 
     path_to_img_dir_on_network = config["path_to_img_dir_on_network"]
     path_to_img_dir_on_remote = config["path_to_img_dir_on_remote"]
 
-    # calculate um actually used per image. insert 10% margin in images (e.g. stitch 
-    # with 10% overlap between images)
+    # calculate um actually used per image. insert margin in images,
+    # e.g. stitch with margin overlap between images on each border
     img_margin_x = round(margin * config["img_size_x"])
     img_margin_y = round(margin * config["img_size_y"])
 
@@ -263,6 +377,8 @@ def take_die_photo(
     path_die_photo = os.path.join(path_out, f"die_{timestamp()}")
     path_die_photo_raw = os.path.join(path_die_photo, "raw")
     os.makedirs(path_die_photo_raw, exist_ok=True)
+
+    controller = SimpleCascadeController(config["gpib_address"])
 
     # mark home
     controller.set_chuck_home()
@@ -302,39 +418,19 @@ def take_die_photo(
     
     # move back to home position
     controller.move_to_chuck_home()
+    controller.close()
 
-    # stitch images together starting from top-left
-    img = Image.new(mode="RGB", size=(count_x * img_size_x_px, count_y * img_size_y_px))
-    # print(img)
+    stitch_images(
+        config=config,
+        path_out=path_die_photo,
+        count_x=count_x,
+        count_y=count_y,
+        margin=margin,
+        downsample=downsample,
+        format=format,
+        show_image=True,
+    )
 
-    # crop area for each image, removing margin (left, upper, right, lower)
-    croparea = (img_margin_x, img_margin_y, config["img_size_x"] - img_margin_x, config["img_size_y"] - img_margin_y)
-    # print(croparea)
-
-    # TODO: downsample each chunk THEN merge, to save memory required
-
-    for nx in range(count_x):
-        for ny in range(count_y):
-            path_img_chunk = os.path.join(path_die_photo_raw, f"{nx}_{ny}_raw.png")
-            img_chunk = Image.open(path_img_chunk)
-            img_chunk = img_chunk.crop(croparea)
-
-            # TODO: make contrast an input parameter
-            filter_contrast = ImageEnhance.Contrast(img_chunk)
-            img_chunk = filter_contrast.enhance(0.75)
-
-            x0 = nx * img_size_x_px
-            y0 = ny * img_size_y_px
-            img.paste(img_chunk, box=(x0, y0))
-
-    if downsample > 1:
-        img = img.resize((int(img.size[0]/downsample), int(img.size[1]/downsample)), resample=Image.Resampling.BILINEAR)
-    
-    path_img_combined_out = os.path.join(path_die_photo, "die_photo.png")
-    img.save(path_img_combined_out)
-
-    # TODO: make this optional
-    img.show()
 
 def take_image(
     config: dict,
@@ -380,18 +476,15 @@ if __name__ == "__main__":
         help="Path to instrument config/calibration"
     )
     parser.add_argument(
-        "-p",
-        "--path_out",
         metavar="path_out",
         dest="path_out",
         type=str,
-        default="scripts/test",
         help="Path to put image output"
     )
     parser.add_argument(
         "-z",
         "--zoom",
-        metavar="zoom",
+        metavar="ZOOM",
         dest="zoom",
         type=str,
         default="1",
@@ -399,17 +492,31 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-x",
-        metavar="um",
+        metavar="UM",
         dest="size_x",
         type=int,
         help="Total x size in [um] (for creating panorama)"
     )
     parser.add_argument(
         "-y",
-        metavar="um",
+        metavar="UM",
         dest="size_y",
         type=int,
         help="Total y size in [um] (for creating panorama)"
+    )
+    parser.add_argument(
+        "-d",
+        metavar="DOWNSAMPLE",
+        dest="downsample",
+        type=float,
+        default=2,
+        help="Set downsampling factor for stitched panorama. Default downscaling is 2x."
+    )
+    parser.add_argument(
+        "--stitch",
+        dest="stitch",
+        action="store_true",
+        help="If specified, searches path_out for existing images to stitch together instead of taking images."
     )
 
     args = parser.parse_args()
@@ -425,24 +532,34 @@ if __name__ == "__main__":
     
     print(config)
 
-    zoom = args.zoom
-    if zoom is None or zoom not in config["calibration"]:
-        zoom_settings = config["calibration"]
-        raise ValueError(f"Invalid zoom setting: {zoom}, must be one of {list(zoom_settings.keys())}")
-
-    # if x, y arguments specified, take a panorama
-    x = args.size_x
-    y = args.size_y
-    if x is None and y is None: # take single image
-        take_image(config, zoom, args.path_out)
-    else:
-        if x is None or y is None: # must both be specified
-            raise ValueError(f"For taking panorama, must specify both -x and -y: currently x: {x}, y: {y}")
-        
-        take_die_photo(
+    if args.stitch:
+        # stitch together images in existing folder without taking new images
+        stitch_images(
             config=config,
-            zoom=zoom,
-            size_x=x,
-            size_y=y,
             path_out=args.path_out,
+            downsample=args.downsample,
+            show_image=True,
         )
+    else: # will take new images and stitch together
+        zoom = args.zoom
+        if zoom is None or zoom not in config["calibration"]:
+            zoom_settings = config["calibration"]
+            raise ValueError(f"Invalid zoom setting: {zoom}, must be one of {list(zoom_settings.keys())}")
+
+        # if x, y arguments specified, take a panorama
+        x = args.size_x
+        y = args.size_y
+        if x is None and y is None: # take single image
+            take_image(config, zoom, args.path_out)
+        else:
+            if x is None or y is None: # must both be specified
+                raise ValueError(f"For taking panorama, must specify both -x and -y: currently x: {x}, y: {y}")
+            
+            take_die_photo(
+                config=config,
+                zoom=zoom,
+                size_x=x,
+                size_y=y,
+                path_out=args.path_out,
+                downsample=args.downsample,
+            )
