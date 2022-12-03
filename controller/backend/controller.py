@@ -510,10 +510,12 @@ class Controller():
         user: str,
         current_die_x: int,
         current_die_y: int,
-        device_dx: float,
-        device_dy: float,
+        die_dx: float,
+        die_dy: float,
         device_row: int,
         device_col: int,
+        device_dx: float,
+        device_dy: float,
         data_folder: str,
         programs: list[MeasurementProgram],
         program_configs: list[dict],
@@ -527,10 +529,12 @@ class Controller():
         print("user =", user)
         print("current_die_x =", current_die_x)
         print("current_die_y =", current_die_y)
-        print("device_dx =", device_dx)
-        print("device_dy =", device_dy)
+        print("die_dx =", die_dx)
+        print("die_dy =", die_dy)
         print("device_row =", device_row)
         print("device_col =", device_col)
+        print("device_dx =", device_dx)
+        print("device_dy =", device_dy)
         print("data_folder =", data_folder)
         print("programs =", programs)
         print("program_configs =", program_configs)
@@ -586,6 +590,8 @@ class Controller():
                         user=user,
                         sweep_config=sweep_config,
                         sweep_save_data=sweep_save_data,
+                        die_dx=die_dx,
+                        die_dy=die_dy,
                         current_die_x=current_die_x,
                         current_die_y=current_die_y,
                         device_dx=device_dx,
@@ -670,10 +676,12 @@ class ControllerApiHandler(Resource):
         user: str,
         current_die_x: int,
         current_die_y: int,
-        device_dx: float,
-        device_dy: float,
+        die_dx: float,
+        die_dy: float,
         device_row: int,
         device_col: int,
+        device_dx: float,
+        device_dy: float,
         data_folder: str,
         programs: list[str],
         program_configs: list[str],
@@ -687,10 +695,12 @@ class ControllerApiHandler(Resource):
         print("user =", user)
         print("current_die_x =", current_die_x)
         print("current_die_y =", current_die_y)
-        print("device_dx =", device_dx, type(device_dx))
-        print("device_dy =", device_dy, type(device_dy))
+        print("die_dx =", die_dx)
+        print("die_dy =", die_dy)
         print("device_row =", device_row)
         print("device_col =", device_col)
+        print("device_dx =", device_dx, type(device_dx))
+        print("device_dy =", device_dy, type(device_dy))
         print("data_folder =", data_folder)
         print("programs =", programs)
         print("program_configs =", program_configs)
@@ -733,10 +743,12 @@ class ControllerApiHandler(Resource):
             user=user,
             current_die_x=current_die_x,
             current_die_y=current_die_y,
-            device_dx=device_dx,
-            device_dy=device_dy,
+            die_dx=die_dx,
+            die_dy=die_dy,
             device_row=device_row,
             device_col=device_col,
+            device_dx=device_dx,
+            device_dy=device_dy,
             data_folder=data_folder,
             programs=instr_programs,
             program_configs=instr_program_configs,

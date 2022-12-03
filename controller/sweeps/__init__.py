@@ -14,6 +14,7 @@ from controller.util.io import export_hdf5, export_mat
 # list of available sweep types (hardcoded)
 MEASUREMENT_SWEEPS = [
     "array",
+    "multidie_array",
     "single",
 ]
 
@@ -31,6 +32,8 @@ class MeasurementSweep(ABC):
         sweep_config,
         die_x,
         die_y,
+        die_dx,
+        die_dy,
         device_row,
         device_col,
         device_dx,
@@ -46,6 +49,8 @@ class MeasurementSweep(ABC):
             "sweep_config": sweep_config,
             "die_x": die_x,
             "die_y": die_y,
+            "die_dx": die_dx,
+            "die_dy": die_dy,
             "device_row": device_row,
             "device_col": device_col,
             "device_dx": device_dx,
@@ -62,6 +67,8 @@ class MeasurementSweep(ABC):
         sweep_config: dict,
         die_x: int,
         die_y: int,
+        die_dx: float,
+        die_dy: float,
         device_row: int,
         device_col: int,
         device_dx: float,
@@ -81,6 +88,8 @@ class MeasurementSweep(ABC):
             sweep_config=sweep_config,
             die_x=die_x,
             die_y=die_y,
+            die_dx=die_dx,
+            die_dy=die_dy,
             device_row=device_row,
             device_col=device_col,
             device_dx=device_dx,
@@ -170,10 +179,12 @@ class MeasurementSweep(ABC):
         sweep_save_data: bool,
         current_die_x: int,
         current_die_y: int,
-        device_dx: float,
-        device_dy: float,
+        die_dx: float,
+        die_dy: float,
         device_row: int,
         device_col: int,
+        device_dx: float,
+        device_dy: float,
         data_folder: str,
         programs: list[MeasurementProgram],
         program_configs: list[dict],
@@ -193,6 +204,9 @@ class MeasurementSweep(ABC):
         if s == "array":
             from controller.sweeps.array import SweepArray
             return SweepArray
+        elif s == "multidie_array":
+            from controller.sweeps.multidie_array import SweepMultiDieArray
+            return SweepMultiDieArray
         elif s == "single":
             from controller.sweeps.single import SweepSingle
             return SweepSingle

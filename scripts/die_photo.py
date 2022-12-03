@@ -466,7 +466,7 @@ def take_image(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Merge RRAM 1T1R sequence measurement files into single .h5 file.")
+    parser = argparse.ArgumentParser(description="Perform die photo using image stitching.")
 
     parser.add_argument(
         "-c",

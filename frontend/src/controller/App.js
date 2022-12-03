@@ -155,6 +155,8 @@ const App = ({
             msg: "run_measurement",
             data: { // snake case to follow python internal convention
                 user: measurementUser,
+                die_dx: parseFloat(dieSizeX),
+                die_dy: parseFloat(dieSizeY),
                 current_die_x: parseInt(currentDieX),
                 current_die_y: parseInt(currentDieY),
                 device_dx: parseFloat(deviceX),

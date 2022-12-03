@@ -25,4 +25,5 @@ scripts/**/*.mat
 scripts/data/*
 !scripts/data/meta.json
 scripts/test/*
+!scripts/test/data
 !scripts/test/.gitkeep

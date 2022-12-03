@@ -1,0 +1,28 @@
+# Example of wafer data file for height compensation
+
+# die size in um
+die_size_x = 24425.0
+die_size_y = 28425.0
+
+# array measured height compensation offset in format
+# (die_x, die_y, offset)
+# where die_x and die_y are integer die coordinates
+# and offset is the measured height offset in um
+height_compensation = [
+    # origin
+    [0.0, 0.0, 0.0],
+    # cross xy axis
+    [1.0, 0.0, 10.0],
+    [2.0, 0.0, 30.0],
+    [-1.0, 0.0, 10.0],
+    [-2.0, 0.0, 30.0],
+    [0.0, 1.0, 10.0],
+    [0.0, 2.0, 30.0],
+    [0.0, -1.0, 10.0],
+    [0.0, -2.0, 30.0],
+    # off-axis
+    [2.0, 2.0, 22.0],
+    [2.0, -2.0, 22.0],
+    [-2.0, 2.0, 22.0],
+    [-2.0, 2.0, 22.0],
+]
