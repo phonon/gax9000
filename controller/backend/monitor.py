@@ -4,7 +4,7 @@ Monitor API
 Handle viewing and sending current measurement data results
 to client monitor.
 """
-import time
+import gevent
 from flask_restful import Api, Resource, reqparse
 
 
@@ -15,7 +15,7 @@ class MonitorApiHandler(Resource):
     
     def get(self):
         print("SLEEP?")
-        time.sleep(4)
+        gevent.sleep(4)
         print("WAKE")
 
         return {

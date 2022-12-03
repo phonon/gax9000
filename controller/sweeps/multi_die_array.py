@@ -135,12 +135,13 @@ class SweepMultiDieArray(MeasurementSweep):
                 if current_die_x != die_x or current_die_y != die_y:
                     # move to contact height (stop contacting devices)
                     instr_cascade.move_contacts_up()
+                    gevent.sleep(0.5) # ensure small delay
 
                     # move chuck to target die location using relative coord from current die
                     dx_to_die = (die_x - current_die_x) * die_dx
                     dy_to_die = (die_y - current_die_y) * die_dy
                     logging.info(f"Moving to die ({die_x}, {die_y}) at ({dx_to_die}, {dy_to_die})")
-                    instr_cascade.move_chuck_relative_to_home(x=dx_to_die, y=dy_to_die)
+                    instr_cascade.move_chuck_relative_to_home(x=dx_to_die, y=dy_to_die, timeout=20.0)
 
                     # TODO: do chuck height compensation from baseline
 
@@ -149,6 +150,8 @@ class SweepMultiDieArray(MeasurementSweep):
                     instr_cascade.set_chuck_home()
                     current_die_x = die_x
                     current_die_y = die_y
+
+                    gevent.sleep(0.5) # ensure small delay
 
                     # move contacts back down to contact device
                     instr_cascade.move_contacts_down()

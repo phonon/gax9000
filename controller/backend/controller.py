@@ -160,16 +160,22 @@ class UserProfile():
 class InstrumentCascade():
     """Interface for controlling cascade auto probe station instrument
     through GPIB. Contains helper functions for common movement operations.
+
+    Note: moving the chuck across wafer can take few seconds, make sure 
+    timeout is long enough to accomodate.
     """
     def __init__(
         self,
         gpib_addr: str,                      # GPIB address of instrument
         invert_direction: bool = True,       # X,Y axis direction (inverted +x,+y is towards top right)
         base_contact_height: float = 5000.0, # height in um for contacting probes to device
+        timeout: float = 8.0,                # standard instrument timeout in seconds
     ):
         # try connecting through gpib
         gpib_resource_manager = pyvisa.ResourceManager()
         self.gpib = gpib_resource_manager.open_resource(gpib_addr)
+        self.gpib.timeout = timeout * 1000.0 # convert to millis
+        self.gpib_timeout_millis = timeout * 1000.0
 
         # get instrument identification string
         self.identifier = self.gpib.query("*IDN?")
@@ -245,7 +251,7 @@ class InstrumentCascade():
             - P - prober, use only prober
             - N - none, no compensation
         """
-        if self.settings.invert_direction:
+        if self.invert_direction:
             dx_ = -dx
             dy_ = -dy
         else:
@@ -256,20 +262,27 @@ class InstrumentCascade():
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
     
-    def move_chuck_relative_to_home(self, x, y):
+    def move_chuck_relative_to_home(self, x, y, timeout=None):
         """Moves wafer chuck relative to home position. See `move_chuck_relative`
-        for MoveChuck command documentation.
+        for MoveChuck command documentation. Accept custom timeout in seconds, for
+        doing large wafer movements (e.g. cross die).
         """
-        if self.settings.invert_direction:
+        if self.invert_direction:
             x_ = -x
             y_ = -y
         else:
             x_ = x
             y_ = y
         
+        if timeout is not None:
+            self.gpib.timeout = timeout * 1000.0
+        
         self.gpib.write(f"MoveChuck {x_} {y_} H Y 100")
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
+        
+        if timeout is not None: # reset
+            self.gpib.timeout = self.gpib_timeout_millis
     
     def move_chuck_home(self):
         """Move chuck to previously set home position. See `move_chuck_relative`
@@ -297,6 +310,7 @@ class InstrumentCascade():
         self.gpib.write(f"MoveChuckContact 50")
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
+    
 
 class ControllerSettings():
     """Global controller settings. These are saved each time

@@ -6,6 +6,7 @@ from typing import Iterator
 import random
 import string
 import json
+import logging
 
 from collections import deque
 from flask import Response, request
@@ -46,7 +47,11 @@ class EventChannel(object):
         self.history.append(ServerSentEvent('start_of_history', None))
 
     def notify(self, message):
-        """Notify all subscribers with message."""
+        """Notify all subscribers with message.
+        Apparently issue occuring with SSE clients not signaling closed 
+        properly...so this raises an error when flask backend publishes to
+        a closed SSE...
+        """
         for sub in self.subscriptions[:]:
             sub.put(message)
 
@@ -58,7 +63,8 @@ class EventChannel(object):
         try:
             while True:
                 yield q.get()
-        except GeneratorExit:
+                gevent.sleep(0.1) # required to prevent blocking thread
+        finally: # should occur after `GeneratorExit` exception
             self.subscriptions.remove(q)
 
     def subscribe(self):
