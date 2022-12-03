@@ -157,7 +157,146 @@ class UserProfile():
             measurement_settings={}, # TODO
         )
         
+class InstrumentCascade():
+    """Interface for controlling cascade auto probe station instrument
+    through GPIB. Contains helper functions for common movement operations.
+    """
+    def __init__(
+        self,
+        gpib_addr: str,                      # GPIB address of instrument
+        invert_direction: bool = True,       # X,Y axis direction (inverted +x,+y is towards top right)
+        base_contact_height: float = 5000.0, # height in um for contacting probes to device
+    ):
+        # try connecting through gpib
+        gpib_resource_manager = pyvisa.ResourceManager()
+        self.gpib = gpib_resource_manager.open_resource(gpib_addr)
 
+        # get instrument identification string
+        self.identifier = self.gpib.query("*IDN?")
+        
+        # flag for inverting coordinate direction
+        # inverted = True means +x,+y is towards top right
+        self.invert_direction = invert_direction
+
+        # height in um for contacting probes to device
+        # used as baseline when doing stage (chuck) height compensation
+        # for multi-die measurement sweeps (to account for non-flat stage
+        # and wafer warping from stress)
+        self.base_contact_height = base_contact_height
+        
+        # flag that a chuck home position has been set by any prior measurement
+        # this is required to ensure `move_chuck_home` is safe
+        self.chuck_home_position_set = False
+    
+    def close(self):
+        """Close instrument GPIB connection."""
+        self.gpib.close()
+    
+    def write(self, command: str):
+        """Manually write a command to instrument (non-blocking)."""
+        self.gpib.write(command)
+    
+    def query(self, command: str):
+        """Manually write and query a command from instrument (blocking)."""
+        return self.gpib.query(command)
+    
+    def read(self):
+        """Manually read a response from instrument (blocking)."""
+        return self.gpib.read()
+
+    def set_chuck_home(self):
+        """Set cascade autoprobe chuck home to current location.
+        This is used in measurements to probe arrays relative to
+        starting location.
+            SetChuckHome Mode Unit
+        Mode:
+            0 - use current position
+            V - use given value
+        Unit
+            Y - micron (default)
+            I - mils
+        """
+        self.gpib.write(f"SetChuckHome 0 Y")
+        self.gpib.read() # read required to flush response
+        self.gpib.query("*OPC?")
+        self.chuck_home_position_set = True
+    
+    def move_chuck_relative(self, dx, dy):
+        """Moves cascade autoprobe chuck relative to current location
+        by (dx, dy). Command format is
+            MoveChuck X Y PosRef Unit Velocity Compensation
+        X: dx
+        Y: dy
+        PosRef:
+            - H - home (default)
+            - Z - zero
+            - C - center
+            - R - current position
+        Unit:
+            - Y - Micron (default)
+            - I - Mils
+            - X - Index
+            - J - jog
+        Velocity: velocity in percent (100% default)
+        Compensation:
+            - D - default (kernel setup default compensation)
+            - T - technology, use prober, offset, and tech compensation
+            - O - offset, use prober and offset
+            - P - prober, use only prober
+            - N - none, no compensation
+        """
+        if self.settings.invert_direction:
+            dx_ = -dx
+            dy_ = -dy
+        else:
+            dx_ = dx
+            dy_ = dy
+        
+        self.gpib.write(f"MoveChuck {dx_} {dy_} R Y 100")
+        self.gpib.read() # read required to flush response
+        self.gpib.query("*OPC?")
+    
+    def move_chuck_relative_to_home(self, x, y):
+        """Moves wafer chuck relative to home position. See `move_chuck_relative`
+        for MoveChuck command documentation.
+        """
+        if self.settings.invert_direction:
+            x_ = -x
+            y_ = -y
+        else:
+            x_ = x
+            y_ = y
+        
+        self.gpib.write(f"MoveChuck {x_} {y_} H Y 100")
+        self.gpib.read() # read required to flush response
+        self.gpib.query("*OPC?")
+    
+    def move_chuck_home(self):
+        """Move chuck to previously set home position. See `move_chuck_relative`
+        for MoveChuck command documentation.
+        """
+        if self.chuck_home_position_set:
+            self.gpib.write(f"MoveChuck 0 0 H Y 100")
+            self.gpib.read() # read required to flush response
+            self.gpib.query("*OPC?")
+        else:
+            logging.error("`move_chuck_home` failed: no home set.")
+    
+    def move_contacts_up(self):
+        """Move contacts up (internally moves chuck down). Command is
+            `MoveChuckAlign Velocity` (velocity = 100% default)
+        """
+        self.gpib.write(f"MoveChuckAlign 50")
+        self.gpib.read() # read required to flush response
+        self.gpib.query("*OPC?")
+    
+    def move_contacts_down(self):
+        """Moves contacts down to touch device (internally moves chuck up).
+            `MoveChuckContact Velocity` (velocity = 100% default)
+        """
+        self.gpib.write(f"MoveChuckContact 50")
+        self.gpib.read() # read required to flush response
+        self.gpib.query("*OPC?")
 
 class ControllerSettings():
     """Global controller settings. These are saved each time
@@ -165,16 +304,18 @@ class ControllerSettings():
     """
     def __init__(
         self,
-        gpib_b1500: int = 16,          # gpib id of b1500 instrument
-        gpib_cascade: int = 22,        # gpib id of cascade instrument
-        users: list = ["public"],      # list of username strings
-        invert_direction: bool = True, # invert chuck movement directions (if true, topleft is (+x,+y))
-        smu_slots: dict = {},          # map SMU # to slot #
+        gpib_b1500: int = 16,                # gpib id of b1500 instrument
+        gpib_cascade: int = 22,              # gpib id of cascade instrument
+        users: list = ["public"],            # list of username strings
+        invert_direction: bool = True,       # invert chuck movement directions (if true, topleft is (+x,+y))
+        base_contact_height: float = 5000.0, # height in um for contacting probes to device
+        smu_slots: dict = {},                # map SMU # to slot #
     ):
         self.gpib_b1500 = gpib_b1500
         self.gpib_cascade = gpib_cascade
         self.users = users
         self.invert_direction = invert_direction
+        self.base_contact_height = base_contact_height
         self.smu_slots = smu_slots
 
     def __repr__(self):
@@ -187,6 +328,7 @@ class ControllerSettings():
             gpib_cascade=22,
             users=["public"],
             invert_direction=True,
+            base_contact_height=5000.0,
             smu_slots={},
         )
 
@@ -205,7 +347,7 @@ class Controller():
         # b1500 parameter analyzer instrument
         self.instrument_b1500 = None
         # cascade instrument
-        self.instrument_cascade = None
+        self.instrument_cascade: InstrumentCascade = None
         # channel to broadcast measurement data results
         self.monitor_channel = monitor_channel
         # controller global settings
@@ -225,9 +367,45 @@ class Controller():
         self.task_lock = BoundedSemaphore(value=1)
         # cancel task signal
         self.signal_cancel_task = SignalCancelTask()
-        # flag that a chuck home position has been set by any prior measurement
-        # this is required to ensure `move_chuck_home` is safe
-        self.chuck_home_position_set = False
+    
+    def connect_b1500(self, gpib: int):
+        """Connect to b1500 instrument resource through GPIB
+        and return identification string."""
+        addr = f"GPIB0::{gpib}::INSTR" # TODO: address string should be setting
+        self.instrument_b1500 = self.resource_manager.open_resource(addr)
+        return self.instrument_b1500.query("*IDN?")
+
+    def disconnect_b1500(self):
+        """Disconnect from b1500 instrument."""
+        if self.instrument_b1500 is not None:
+            # check if task lock active (do not allow disconnecting
+            # in middle of measurement)
+            if self.task_lock.acquire(blocking=False, timeout=None):
+                self.instrument_b1500.close()
+                self.instrument_b1500 = None
+                self.task_lock.release()
+
+    def connect_cascade(self, gpib: int):
+        """Connect to cascade instrument resource through GPIB
+        and return identification string."""
+        addr = f"GPIB0::{gpib}::INSTR" # TODO: address string should be setting
+        try:
+            self.instrument_cascade = InstrumentCascade(
+                gpib_addr=addr,
+                invert_direction=self.settings.invert_direction,
+                base_contact_height=self.settings.base_contact_height,
+            )
+            return self.instrument_cascade.identifier
+        except:
+            self.instrument_cascade = None
+            logging.error(f"Failed to connect to cascade instrument at {addr}")
+            return f"FAILED connection to {addr}"
+
+    def disconnect_cascade(self):
+        """Disconnect from cascade instrument."""
+        if self.instrument_cascade is not None:
+            self.instrument_cascade.close()
+            self.instrument_cascade = None
     
     def load_settings(self):
         """Load controller settings from file."""
@@ -362,158 +540,16 @@ class Controller():
                     f.write(config)
                 else:
                     json.dump(config, f, indent=2)
-
-    def connect_b1500(self, gpib: int):
-        """Connect to b1500 instrument resource through GPIB
-        and return identification string."""
-        addr = f"GPIB0::{gpib}::INSTR"
-        self.instrument_b1500 = self.resource_manager.open_resource(addr)
-        return self.instrument_b1500.query("*IDN?")
-
-    def disconnect_b1500(self):
-        """Disconnect from b1500 instrument."""
-        if self.instrument_b1500 is not None:
-            # check if task lock active (do not allow disconnecting
-            # in middle of measurement)
-            if self.task_lock.acquire(blocking=False, timeout=None):
-                self.instrument_b1500.close()
-                self.instrument_b1500 = None
-                self.task_lock.release()
-
-    def connect_cascade(self, gpib: int):
-        """Connect to cascade instrument resource through GPIB
-        and return identification string."""
-        addr = f"GPIB0::{gpib}::INSTR"
-        self.instrument_cascade = self.resource_manager.open_resource(addr)
-        return self.instrument_cascade.query("*IDN?")
-
-    def disconnect_cascade(self):
-        """Disconnect from cascade instrument."""
-        if self.instrument_cascade is not None:
-            self.instrument_cascade.close()
-            self.instrument_cascade = None
-    
-    def set_chuck_home(self):
-        """Set cascade autoprobe chuck home to current location.
-        This is used in measurements to probe arrays relative to
-        starting location.
-            SetChuckHome Mode Unit
-        Mode:
-            0 - use current position
-            V - use given value
-        Unit
-            Y - micron (default)
-            I - mils
-        """
-        if self.instrument_cascade is not None:
-            self.instrument_cascade.write(f"SetChuckHome 0 Y")
-            self.instrument_cascade.read() # read required to flush response
-            self.instrument_cascade.query("*OPC?")
-            self.chuck_home_position_set = True
-        else:
-            logging.error("`set_chuck_home` failed: no Cascade connected.")
-    
-    def move_chuck_relative(self, dx, dy):
-        """Moves cascade autoprobe chuck relative to current location
-        by (dx, dy). Command format is
-            MoveChuck X Y PosRef Unit Velocity Compensation
-        X: dx
-        Y: dy
-        PosRef:
-            - H - home (default)
-            - Z - zero
-            - C - center
-            - R - current position
-        Unit:
-            - Y - Micron (default)
-            - I - Mils
-            - X - Index
-            - J - jog
-        Velocity: velocity in percent (100% default)
-        Compensation:
-            - D - default (kernel setup default compensation)
-            - T - technology, use prober, offset, and tech compensation
-            - O - offset, use prober and offset
-            - P - prober, use only prober
-            - N - none, no compensation
-        """
-        if self.instrument_cascade is not None:
-            if self.settings.invert_direction:
-                dx_ = -dx
-                dy_ = -dy
-            else:
-                dx_ = dx
-                dy_ = dy
-            
-            self.instrument_cascade.write(f"MoveChuck {dx_} {dy_} R Y 100")
-            self.instrument_cascade.read() # read required to flush response
-            self.instrument_cascade.query("*OPC?")
-        else:
-            logging.error("`move_chuck_relative` failed: no Cascade connected.")
-    
-    def move_chuck_relative_to_home(self, x, y):
-        """Moves wafer chuck relative to home position. See `move_chuck_relative`
-        for MoveChuck command documentation.
-        """
-        if self.instrument_cascade is not None:
-            if self.settings.invert_direction:
-                x_ = -x
-                y_ = -y
-            else:
-                x_ = x
-                y_ = y
-            
-            self.instrument_cascade.write(f"MoveChuck {x_} {y_} H Y 100")
-            self.instrument_cascade.read() # read required to flush response
-            self.instrument_cascade.query("*OPC?")
-        else:
-            logging.error("`move_chuck_relative_to_home` failed: no Cascade connected.")
-    
-    def move_chuck_home(self):
-        """Move chuck to previously set home position. See `move_chuck_relative`
-        for MoveChuck command documentation.
-        """
-        if self.instrument_cascade is not None:
-            if self.chuck_home_position_set:
-                self.instrument_cascade.write(f"MoveChuck 0 0 H Y 100")
-                self.instrument_cascade.read() # read required to flush response
-                self.instrument_cascade.query("*OPC?")
-            else:
-                logging.error("`move_chuck_home` failed: no home set.")
-        else:
-            logging.error("`move_chuck_home` failed: no Cascade connected.")
-    
-    def move_contacts_up(self):
-        """Move contacts up (internally moves chuck down). Command is
-            `MoveChuckAlign Velocity` (velocity = 100% default)
-        """
-        if self.instrument_cascade is not None:
-            self.instrument_cascade.write(f"MoveChuckAlign 50")
-            self.instrument_cascade.read() # read required to flush response
-            self.instrument_cascade.query("*OPC?")
-        else:
-            logging.error("`move_contacts_up` failed: no Cascade connected.")
-    
-    def move_contacts_down(self):
-        """Moves contacts down to touch device (internally moves chuck up).
-            `MoveChuckContact Velocity` (velocity = 100% default)
-        """
-        if self.instrument_cascade is not None:
-            self.instrument_cascade.write(f"MoveChuckContact 50")
-            self.instrument_cascade.read() # read required to flush response
-            self.instrument_cascade.query("*OPC?")
-        else:
-            logging.error("`move_contacts_down` failed: no Cascade connected.")
         
     def run_measurement(
         self,
         user: str,
-        current_die_x: int,
-        current_die_y: int,
+        initial_die_x: int,
+        initial_die_y: int,
         die_dx: float,
         die_dy: float,
-        device_row: int,
-        device_col: int,
+        initial_device_row: int,
+        initial_device_col: int,
         device_dx: float,
         device_dy: float,
         data_folder: str,
@@ -527,12 +563,12 @@ class Controller():
     ):
         print("RUNNING MEASUREMENT")
         print("user =", user)
-        print("current_die_x =", current_die_x)
-        print("current_die_y =", current_die_y)
+        print("initial_die_x =", initial_die_x)
+        print("initial_die_y =", initial_die_y)
         print("die_dx =", die_dx)
         print("die_dy =", die_dy)
-        print("device_row =", device_row)
-        print("device_col =", device_col)
+        print("initial_device_row =", initial_device_row)
+        print("initial_device_col =", initial_device_col)
         print("device_dx =", device_dx)
         print("device_dy =", device_dy)
         print("data_folder =", data_folder)
@@ -569,13 +605,9 @@ class Controller():
             # reset cancel task signal
             self.signal_cancel_task.reset()
 
-            # set current chuck home position
+            # set current probe station chuck home position
             if self.instrument_cascade is not None:
-                self.set_chuck_home()
-
-            # callback to move chuck
-            def callback_move_chuck(x, y):
-                self.move_chuck_relative_to_home(x, y)
+                self.instrument_cascade.set_chuck_home()
             
             def task():
                 status = False # measurement result status: TODO replace with something better
@@ -586,18 +618,17 @@ class Controller():
                     sweep.run(
                         instr_b1500=self.instrument_b1500,
                         instr_cascade=self.instrument_cascade,
-                        move_chuck=callback_move_chuck,
                         user=user,
                         sweep_config=sweep_config,
                         sweep_save_data=sweep_save_data,
                         die_dx=die_dx,
                         die_dy=die_dy,
-                        current_die_x=current_die_x,
-                        current_die_y=current_die_y,
+                        initial_die_x=initial_die_x,
+                        initial_die_y=initial_die_y,
                         device_dx=device_dx,
                         device_dy=device_dy,
-                        device_row=device_row,
-                        device_col=device_col,
+                        initial_device_row=initial_device_row,
+                        initial_device_col=initial_device_col,
                         data_folder=data_folder,
                         programs=programs,
                         program_configs=program_configs,
@@ -674,12 +705,12 @@ class ControllerApiHandler(Resource):
     def run_measurement(
         self,
         user: str,
-        current_die_x: int,
-        current_die_y: int,
+        initial_die_x: int,
+        initial_die_y: int,
         die_dx: float,
         die_dy: float,
-        device_row: int,
-        device_col: int,
+        initial_device_row: int,
+        initial_device_col: int,
         device_dx: float,
         device_dy: float,
         data_folder: str,
@@ -693,12 +724,12 @@ class ControllerApiHandler(Resource):
         """Run measurement task."""
         print("BEGIN MEASUREMENT PARSING")
         print("user =", user)
-        print("current_die_x =", current_die_x)
-        print("current_die_y =", current_die_y)
+        print("initial_die_x =", initial_die_x)
+        print("initial_die_y =", initial_die_y)
         print("die_dx =", die_dx)
         print("die_dy =", die_dy)
-        print("device_row =", device_row)
-        print("device_col =", device_col)
+        print("initial_device_row =", initial_device_row)
+        print("initial_device_col =", initial_device_col)
         print("device_dx =", device_dx, type(device_dx))
         print("device_dy =", device_dy, type(device_dy))
         print("data_folder =", data_folder)
@@ -741,12 +772,12 @@ class ControllerApiHandler(Resource):
         # run internal measurement task
         self.controller.run_measurement(
             user=user,
-            current_die_x=current_die_x,
-            current_die_y=current_die_y,
+            initial_die_x=initial_die_x,
+            initial_die_y=initial_die_y,
             die_dx=die_dx,
             die_dy=die_dy,
-            device_row=device_row,
-            device_col=device_col,
+            initial_device_row=initial_device_row,
+            initial_device_col=initial_device_col,
             device_dx=device_dx,
             device_dy=device_dy,
             data_folder=data_folder,
@@ -884,20 +915,32 @@ class ControllerApiHandler(Resource):
 
     def move_chuck_relative(self, dx, dy):
         """Move chuck relative to current position."""
-        self.controller.move_chuck_relative(dx, dy)
-    
+        if self.controller.instrument_cascade is not None:
+            self.controller.instrument_cascade.move_chuck_relative(dx, dy)
+        else:
+            logging.error("`move_chuck_relative` failed: no Cascade connected.")
+        
     def move_chuck_home(self):
         """Move chuck relative to current position."""
-        self.controller.move_chuck_home()
-    
+        if self.controller.instrument_cascade is not None:
+            self.controller.instrument_cascade.move_chuck_home()
+        else:
+            logging.error("`move_chuck_home` failed: no Cascade connected.")
+        
     def move_contacts_up(self):
         """Move contacts up."""
-        self.controller.move_contacts_up()
-    
+        if self.controller.instrument_cascade is not None:
+            self.controller.instrument_cascade.move_contacts_up()
+        else:
+            logging.error("`move_contacts_up` failed: no Cascade connected.")
+        
     def move_contacts_down(self):
         """Move contacts down."""
-        self.controller.move_contacts_down()
-
+        if self.controller.instrument_cascade is not None:
+            self.controller.instrument_cascade.move_contacts_down()
+        else:
+            logging.error("`move_contacts_down` failed: no Cascade connected.")
+    
     def get(self):
         """Returns global controller config settings."""
         # reload controller settings on page load

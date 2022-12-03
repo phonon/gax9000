@@ -36,12 +36,12 @@ class SweepMultiDieArray(MeasurementSweep):
         user,
         sweep_config,
         sweep_save_data,
-        current_die_x,
-        current_die_y,
+        initial_die_x,
+        initial_die_y,
         die_dx,
         die_dy,
-        device_row,
-        device_col,
+        initial_device_row,
+        initial_device_col,
         device_dx,
         device_dy,
         data_folder,
@@ -49,7 +49,6 @@ class SweepMultiDieArray(MeasurementSweep):
         program_configs,
         instr_b1500=None,
         instr_cascade=None,
-        move_chuck=None, # callback to move chuck (x, y) relative to home (start position)
         monitor_channel=None,
         signal_cancel=None,
     ):
@@ -81,12 +80,12 @@ class SweepMultiDieArray(MeasurementSweep):
                 user=user,
                 sweep_name=SweepMultiDieArray.name,
                 sweep_config=sweep_config,
-                die_x=current_die_x,
-                die_y=current_die_y,
+                initial_die_x=initial_die_x,
+                initial_die_y=initial_die_y,
                 die_dx=die_dx,
                 die_dy=die_dy,
-                device_row=device_row,
-                device_col=device_col,
+                initial_device_row=initial_device_row,
+                initial_device_col=initial_device_col,
                 device_dx=device_dx,
                 device_dy=device_dy,
                 data_folder=data_folder,
@@ -118,10 +117,9 @@ class SweepMultiDieArray(MeasurementSweep):
             # TODO: proper multithreaded task
             gevent.sleep(0.3)
 
-        # use current die x,y to determine origin for die (0, 0)
-        x0 = -current_die_x * die_dx
-        y0 = -current_die_y * die_dy
-        
+        # store current die location
+        current_die_x = initial_die_x
+        current_die_y = initial_die_y
 
         for die_coord in die_coordinates:
             die_x, die_y = die_coord
@@ -132,48 +130,57 @@ class SweepMultiDieArray(MeasurementSweep):
 
             logging.info(f"Moving to die ({die_x}, {die_y})")
 
-            # make directory for die data
-            os.makedirs(os.path.join(data_folder, f"die_x_{die_x}_y_{die_y}"), exist_ok=True)
-
             if instr_cascade is not None:
-                pass
-                # TODO: move chuck to die
-                # 1. move contact height
-                # 2. move chuck to die location
-                # 3. do chuck height compensation from baseline
-                # 4. move contact height
+                # move to die location and set home origin
+                if current_die_x != die_x or current_die_y != die_y:
+                    # move to contact height (stop contacting devices)
+                    instr_cascade.move_contacts_up()
 
-                # set check home position (for array measurement) to current die location
-                # instr_cascade.set_chuck_home()
+                    # move chuck to target die location using relative coord from current die
+                    dx_to_die = (die_x - current_die_x) * die_dx
+                    dy_to_die = (die_y - current_die_y) * die_dy
+                    logging.info(f"Moving to die ({die_x}, {die_y}) at ({dx_to_die}, {dy_to_die})")
+                    instr_cascade.move_chuck_relative_to_home(x=dx_to_die, y=dy_to_die)
+
+                    # TODO: do chuck height compensation from baseline
+
+                    # update to new die location and set check home position
+                    # (for array measurement) to current die location
+                    instr_cascade.set_chuck_home()
+                    current_die_x = die_x
+                    current_die_y = die_y
+
+                    # move contacts back down to contact device
+                    instr_cascade.move_contacts_down()
             
             if sweep_order == "row":
-                for ny, row in enumerate(range(device_row, device_row + num_rows)):
-                    for nx, col in enumerate(range(device_col, device_col + num_cols)):
+                for ny, row in enumerate(range(initial_device_row, initial_device_row + num_rows)):
+                    for nx, col in enumerate(range(initial_device_col, initial_device_col + num_cols)):
                         run_inner(die_x, die_y, row, col, row_col_str=f"r{row}_c{col}")
                         # check cancel signal and return if received
                         if signal_cancel is not None and signal_cancel.is_cancelled():
                             logging.info("Measurement cancelled by signal.")
                             return
                         # move chuck by 1 col
-                        if nx < (num_cols-1) and move_chuck is not None:
-                            move_chuck(x=(nx+1)*device_dx, y=ny*device_dy)
+                        if nx < (num_cols-1) and instr_cascade is not None:
+                            instr_cascade.move_chuck_relative_to_home(x=(nx+1)*device_dx, y=ny*device_dy)
                     # move chuck back to col 0, move up by 1 row
-                    if ny < (num_rows-1) and move_chuck is not None:
-                        move_chuck(x=0, y=(ny+1)*device_dy)
+                    if ny < (num_rows-1) and instr_cascade is not None:
+                        instr_cascade.move_chuck_relative_to_home(x=0, y=(ny+1)*device_dy)
             elif sweep_order == "col":
-                for nx, col in enumerate(range(device_col, device_col + num_cols)):
-                    for ny, row in enumerate(range(device_row, device_row + num_rows)):
+                for nx, col in enumerate(range(initial_device_col, initial_device_col + num_cols)):
+                    for ny, row in enumerate(range(initial_device_row, initial_device_row + num_rows)):
                         run_inner(die_x, die_y, row, col, row_col_str=f"c{col}_r{row}")
                         # check cancel signal and return if received
                         if signal_cancel is not None and signal_cancel.is_cancelled():
                             logging.info("Measurement cancelled by signal.")
                             return
                         # move chuck by 1 row
-                        if ny < (num_rows-1) and move_chuck is not None:
-                            move_chuck(x=nx*device_dx, y=(ny+1)*device_dy)
+                        if ny < (num_rows-1) and instr_cascade is not None:
+                            instr_cascade.move_chuck_relative_to_home(x=nx*device_dx, y=(ny+1)*device_dy)
                     # move chuck back to row 0, move by 1 col
-                    if nx < (num_cols-1) and move_chuck is not None:
-                        move_chuck(x=(nx+1)*device_dx, y=0)
+                    if nx < (num_cols-1) and instr_cascade is not None:
+                        instr_cascade.move_chuck_relative_to_home(x=(nx+1)*device_dx, y=0)
             else:
                 raise ValueError(f"Invalid sweep_order {sweep_order}, must be 'row' or 'col'")
         

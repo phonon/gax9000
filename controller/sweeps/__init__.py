@@ -14,7 +14,7 @@ from controller.util.io import export_hdf5, export_mat
 # list of available sweep types (hardcoded)
 MEASUREMENT_SWEEPS = [
     "array",
-    "multidie_array",
+    "multi_die_array",
     "single",
 ]
 
@@ -30,12 +30,12 @@ class MeasurementSweep(ABC):
         user,
         sweep,
         sweep_config,
-        die_x,
-        die_y,
+        initial_die_x,
+        initial_die_y,
         die_dx,
         die_dy,
-        device_row,
-        device_col,
+        initial_device_row,
+        initial_device_col,
         device_dx,
         device_dy,
         data_folder,
@@ -47,12 +47,12 @@ class MeasurementSweep(ABC):
             "user": user,
             "sweep": sweep,
             "sweep_config": sweep_config,
-            "die_x": die_x,
-            "die_y": die_y,
+            "initial_die_x": initial_die_x,
+            "initial_die_y": initial_die_y,
             "die_dx": die_dx,
             "die_dy": die_dy,
-            "device_row": device_row,
-            "device_col": device_col,
+            "initial_device_row": initial_device_row,
+            "initial_device_col": initial_device_col,
             "device_dx": device_dx,
             "device_dy": device_dy,
             "data_folder": data_folder,
@@ -65,12 +65,12 @@ class MeasurementSweep(ABC):
         user: str,
         sweep_name: str,
         sweep_config: dict,
-        die_x: int,
-        die_y: int,
+        initial_die_x: int,
+        initial_die_y: int,
         die_dx: float,
         die_dy: float,
-        device_row: int,
-        device_col: int,
+        initial_device_row: int,
+        initial_device_col: int,
         device_dx: float,
         device_dy: float,
         data_folder: str,
@@ -86,12 +86,12 @@ class MeasurementSweep(ABC):
             user=user,
             sweep=sweep_name,
             sweep_config=sweep_config,
-            die_x=die_x,
-            die_y=die_y,
+            initial_die_x=initial_die_x,
+            initial_die_y=initial_die_y,
             die_dx=die_dx,
             die_dy=die_dy,
-            device_row=device_row,
-            device_col=device_col,
+            initial_device_row=initial_device_row,
+            initial_device_col=initial_device_col,
             device_dx=device_dx,
             device_dy=device_dy,
             data_folder=data_folder,
@@ -177,12 +177,12 @@ class MeasurementSweep(ABC):
         user: str,
         sweep_config: dict,
         sweep_save_data: bool,
-        current_die_x: int,
-        current_die_y: int,
+        initial_die_x: int,
+        initial_die_y: int,
         die_dx: float,
         die_dy: float,
-        device_row: int,
-        device_col: int,
+        initial_device_row: int,
+        initial_device_col: int,
         device_dx: float,
         device_dy: float,
         data_folder: str,
@@ -190,7 +190,6 @@ class MeasurementSweep(ABC):
         program_configs: list[dict],
         instr_b1500=None,
         instr_cascade=None,
-        move_chuck=None, # callback to move chuck (x, y) relative to home (start position)
         monitor_channel=None,
         signal_cancel=None,
     ):
@@ -204,8 +203,8 @@ class MeasurementSweep(ABC):
         if s == "array":
             from controller.sweeps.array import SweepArray
             return SweepArray
-        elif s == "multidie_array":
-            from controller.sweeps.multidie_array import SweepMultiDieArray
+        elif s == "multi_die_array":
+            from controller.sweeps.multi_die_array import SweepMultiDieArray
             return SweepMultiDieArray
         elif s == "single":
             from controller.sweeps.single import SweepSingle

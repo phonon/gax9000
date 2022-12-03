@@ -26,12 +26,12 @@ class SweepSingle(MeasurementSweep):
         user,
         sweep_config,
         sweep_save_data,
-        current_die_x,
-        current_die_y,
+        initial_die_x,
+        initial_die_y,
         die_dx,
         die_dy,
-        device_row,
-        device_col,
+        initial_device_row,
+        initial_device_col,
         device_dx,
         device_dy,
         data_folder,
@@ -39,24 +39,23 @@ class SweepSingle(MeasurementSweep):
         program_configs,
         instr_b1500=None,
         instr_cascade=None,
-        move_chuck=None,
         monitor_channel=None,
         signal_cancel=None,
     ):
         """Run the sweep. Just a wrapper around MeasurementSweep.run_single."""
         t_measurement = timestamp()
-        save_dir = f"gax_r{device_row}_c{device_col}_{t_measurement}"
+        save_dir = f"gax_r{initial_device_row}_c{initial_device_col}_{t_measurement}"
 
         sweep_metadata = MeasurementSweep.save_metadata(
             user=user,
             sweep_name=SweepSingle.name,
             sweep_config=sweep_config,
-            die_x=current_die_x,
-            die_y=current_die_y,
+            initial_die_x=initial_die_x,
+            initial_die_y=initial_die_y,
             die_dx=die_dx,
             die_dy=die_dy,
-            device_row=device_row,
-            device_col=device_col,
+            initial_device_row=initial_device_row,
+            initial_device_col=initial_device_col,
             device_dx=device_dx,
             device_dy=device_dy,
             data_folder=data_folder,
