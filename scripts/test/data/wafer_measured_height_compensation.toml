@@ -7,22 +7,33 @@ die_size_y = 28425.0
 # array measured height compensation offset in format
 # (die_x, die_y, offset)
 # where die_x and die_y are integer die coordinates
-# and offset is the measured height offset in um
+# and offset is the measured height offset needed in um
+# (below is actual data from MIT-skywater 2022 MPW wafer on our 
+# probe station "gax2", measured visually by moving height
+# down until sample pads are in focus again.)
 height_compensation = [
     # origin
     [0.0, 0.0, 0.0],
-    # cross xy axis
-    [1.0, 0.0, 10.0],
-    [2.0, 0.0, 30.0],
-    [-1.0, 0.0, 10.0],
-    [-2.0, 0.0, 30.0],
-    [0.0, 1.0, 10.0],
-    [0.0, 2.0, 30.0],
-    [0.0, -1.0, 10.0],
-    [0.0, -2.0, 30.0],
+    # cross along xy axis
+    [ 1.0,  0.0,   0.0],
+    [ 2.0,  0.0, -20.0],
+    [ 3.0,  0.0, -75.6],
+    [-1.0,  0.0,  -1.0],
+    [-2.0,  0.0, -11.7],
+    [-3.0,  0.0, -55.3],
+    [ 0.0,  1.0,  -3.0],
+    [ 0.0,  2.0, -31.4],
+    [ 0.0,  3.0, -98.8],
+    [ 0.0, -1.0,   0.0],
+    [ 0.0, -2.0, -22.8],
+    [ 0.0, -3.0, -90.2],
     # off-axis
-    [2.0, 2.0, 22.0],
-    [2.0, -2.0, 22.0],
-    [-2.0, 2.0, 22.0],
-    [-2.0, 2.0, 22.0],
+    [ 1.0,  1.0,  -9.2],
+    [ 2.0,  2.0, -79.2],
+    [ 1.0, -1.0,  -5.7],
+    [ 2.0, -2.0, -71.0],
+    [-1.0,  1.0,  -8.6],
+    [-2.0,  2.0, -68.3],
+    [-1.0, -1.0,  -4.5],
+    [-2.0, -2.0, -58.3],
 ]
