@@ -311,6 +311,16 @@ class InstrumentCascade():
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
     
+    def move_to_contact_height_with_offset(self, dz: float):
+        """Moves contacts down to touch device with some dz offset,
+        for height compensation.
+            `MoveChuckContact Velocity` (velocity = 100% default)
+        """
+        # TODO
+        self.gpib.write(f"MoveChuckContact 50")
+        self.gpib.read() # read required to flush response
+        self.gpib.query("*OPC?")
+    
 
 class ControllerSettings():
     """Global controller settings. These are saved each time

@@ -6,6 +6,62 @@ from controller.sweeps import MeasurementSweep
 from controller.util import timestamp, dict_np_array_to_json_array
 from controller.util.io import export_hdf5, export_mat
 
+def create_die_height_offset_interp2d(
+    path_die_measurements: str,
+):
+    """Load die height offset measurements from file and generate heightmap
+    using basic linear interpolation. For interpolation methods, see
+    https://stackoverflow.com/questions/54432470/how-to-get-a-non-smoothing-2d-spline-interpolation-with-scipy
+
+    Issue with default scipy.interpolate.interp2d is that it relies on
+    fitting coefficients, so the resulting curve is smooth. However, this
+    does not guarantee the interpolated values will end up going through
+    the input points.
+
+    Returns a function `interp2d(x, y): dz` that gives interpolated height
+    offset (dz < 0.0) at a given die location (x, y).
+    """
+    import tomli
+    import numpy as np
+    from scipy.interpolate import interp2d
+    
+    with open(path_die_measurements, "rb") as f:
+        toml_dict = tomli.load(f)
+        
+        # fill arrays of points and height offsets
+        num_points = len(toml_dict["die_height_offset"])
+        x_vals = np.full((num_points,), np.nan)
+        y_vals = np.full((num_points,), np.nan)
+        dz_vals = np.full((num_points,), np.nan)
+
+        # each measurement is in format like {x: -1.0, y: -2.0, dz: -4}
+        for i, x_y_dz in enumerate(toml_dict["die_height_offset"]):
+            x, y, dz = x_y_dz.values()
+            x_vals[i] = x
+            y_vals[i] = y
+            dz_vals[i] = dz
+
+        # alternative interpolation method, uses delaunay triangulation
+        # and just directly interpolates points. this method ensures heights
+        # go through input points
+        # die_dz_ct_interp2d = CloughTocher2DInterpolator(
+        #     np.concatenate((x_vals[:, None], y_vals[:, None]), axis=1),
+        #     dz_vals,
+        # )
+
+        # just use scipy.interpolate.interp2d (fits coefficients)
+        interp2d_fn = interp2d(x_vals, y_vals, dz_vals, kind="cubic")
+
+        def die_dz_interp2d_func(x, y):
+            dz = np.maximum(0.0, interp2d_fn(x, y))
+            if np.isscalar(dz):
+                return dz
+            else:
+                return np.squeeze(dz)
+
+        return die_dz_interp2d_func
+
+
 class SweepMultiDieArray(MeasurementSweep):
     """Implement an array sweep on multiple dies: foreach die
     coordinate, run an array sweep.
@@ -25,6 +81,7 @@ class SweepMultiDieArray(MeasurementSweep):
             "dies": [
                 [0, 0],
             ],
+            "height_compensation_file": None,
             "array": {
                 "num_rows": 1,
                 "num_cols": 1,
@@ -60,6 +117,13 @@ class SweepMultiDieArray(MeasurementSweep):
         num_cols = sweep_config["array"]["num_cols"]
         sweep_order = sweep_config["array"]["sweep_order"]
 
+        if "height_compensation_file" in sweep_config:
+            path_height_compensation = sweep_config["height_compensation_file"]
+            die_dz_interp2d = create_die_height_offset_interp2d(path_height_compensation)
+            use_height_compensation = True
+        else:
+            use_height_compensation = False
+        
         # create closure here to simplify passing arguments
         def run_inner(
             die_x: int,
@@ -154,7 +218,11 @@ class SweepMultiDieArray(MeasurementSweep):
                     gevent.sleep(0.5) # ensure small delay
 
                     # move contacts back down to contact device
-                    instr_cascade.move_contacts_down()
+                    if use_height_compensation:
+                        dz = die_dz_interp2d(die_x, die_y)
+                        instr_cascade.move_to_contact_height_with_offset(dz)
+                    else:
+                        instr_cascade.move_contacts_down()
             
             if sweep_order == "row":
                 for ny, row in enumerate(range(initial_device_row, initial_device_row + num_rows)):

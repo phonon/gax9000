@@ -1,4 +1,7 @@
 """
+UNUSED: currently just doing linear interpolation of measured
+height points.
+
 Generate sampled die height compensation map for a wafer from
 measured points. See `wafer_height_model` for description of
 wafer heightmap compensation model used.
@@ -135,6 +138,71 @@ def run_fit_test():
 
     print(tabulate(comparison, headers=["param", "original", "estimate"]))
 
+
+def test_create_heightmap(
+    path_measurements: str,
+):
+    """Load die height offset measurements from file and generate heightmap
+    using basic linear interpolation. For interpolation methods, see
+    https://stackoverflow.com/questions/54432470/how-to-get-a-non-smoothing-2d-spline-interpolation-with-scipy
+
+    Issue with default scipy.interpolate.interp2d is that it relies on
+    fitting coefficients, so the resulting curve is smooth. However, this
+    does not guarantee the interpolated values will end up going through
+    the input points.
+    """
+    import numpy as np
+    from scipy.interpolate import interp2d
+    from scipy.interpolate import CloughTocher2DInterpolator
+    from tabulate import tabulate
+
+    with open(path_measurements, "rb") as f:
+        toml_dict = tomli.load(f)
+        print(toml_dict)
+        
+        # fill arrays of points and height offsets
+        num_points = len(toml_dict["die_height_offset"])
+        x_vals = np.full((num_points,), np.nan)
+        y_vals = np.full((num_points,), np.nan)
+        dz_vals = np.full((num_points,), np.nan)
+
+        # each measurement is in format like {x: -1.0, y: -2.0, dz: -4}
+        for i, x_y_dz in enumerate(toml_dict["die_height_offset"]):
+            x, y, dz = x_y_dz.values()
+            print(x, y, dz)
+            x_vals[i] = x
+            y_vals[i] = y
+            dz_vals[i] = dz
+        
+        print("x_vals", x_vals)
+        print("y_vals", y_vals)
+        print("dz_vals", dz_vals)
+
+        # print table of interpolated values using two methods
+        x_sample = np.array([-3, -2, -1, 0, 1, 2, 3])
+        y_sample = np.array([3, 2, 1, 0, -1, -2, -3])
+
+        # 1. scipy.interpolate.interp2d (fits coefficients)
+        die_dz_interp2d = interp2d(x_vals, y_vals, dz_vals, kind="cubic")
+        dz_table = []
+        for y in y_sample:
+            dz = np.minimum(0.0, die_dz_interp2d(x_sample, y)) # force clamp to 0.0 max
+            dz_table.append(dz)
+        print("USING scipy.interpolate.interp2d (fits coefficients)")
+        print(tabulate(dz_table))
+
+        # 2. 
+        die_dz_ct_interp2d = CloughTocher2DInterpolator(
+            np.concatenate((x_vals[:, None], y_vals[:, None]), axis=1),
+            dz_vals,
+        )
+        dz_table2 = []
+        for y in y_sample:
+            dz = np.minimum(0.0, die_dz_ct_interp2d(x_sample, y))
+            dz_table2.append(dz)
+        print("USING scipy.interpolate.CloughTocher2DInterpolator (ensures points match)")
+        print(tabulate(dz_table2))
+
 if __name__ == "__main__":
     import argparse
 
@@ -144,6 +212,7 @@ if __name__ == "__main__":
         "-i",
         "--input",
         metavar="WAFER_PARAMS",
+        dest="path_in",
         type=str,
         help="Path to wafer parameters (die size, height map, see sample)"
     )
@@ -168,5 +237,6 @@ if __name__ == "__main__":
     if args.test:
         run_fit_test()
         exit(0)
-    
+    else:
+        test_create_heightmap(args.path_in)
     
