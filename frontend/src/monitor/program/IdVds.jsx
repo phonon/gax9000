@@ -14,21 +14,15 @@ import { colormap, colorTo255Range, colorBrighten } from "../util.js";
 
 export const ProgramIdVds = ({
     metadata,
-    data,
+    datasets,
 }) => {
     console.log("RENDERING ProgramIdVds");
     console.log(metadata);
-    console.log(data);
+    console.log(datasets);
 
     const measurementConfigString = JSON.stringify(metadata.config, null, 2);
 
-    // get num points/bias points from data shape: (bias, sweeps, points)
-    const numBias = metadata.step !== undefined ? metadata.step : data.v_ds.length;
-    const numSweeps = data.v_ds[0].length;
-    const numPoints = data.v_ds[0][0].length;
-
-    console.log(`numBias=${numBias}, numSweeps=${numSweeps}, numPoints=${numPoints}`);
-
+    // plot traces
     const tracesIdVds = [];
     const tracesIgVds = [];
 
@@ -37,48 +31,60 @@ export const ProgramIdVds = ({
     const idMaxList = [];
     const igMaxList = [];
 
-    for ( let b = 0; b < numBias; b++ ) {
-        // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
-        const colBase = colorTo255Range(colormap(b, -1, numBias));
-        
-        // add vgs bias
-        vgsList.push(data.v_gs[b][0][0]);
+    for ( const dataset of datasets.values() ) {
+        const datasetMetadata = dataset.metadata;
+        const data = dataset.data;
 
-        for ( let s = 0; s < numSweeps; s++ ) {
-            // make additional sweeps brighter for visibility
-            const col = colorBrighten(colBase, 0.6 + (s * 0.4));
+        // get num points/bias points from data shape: (bias, sweeps, points)
+        const numBias = datasetMetadata.step !== undefined ? datasetMetadata.step : data.v_ds.length;
+        const numSweeps = data.v_ds[0].length;
+        const numPoints = data.v_ds[0][0].length;
 
-            const vgs = data.v_gs[b][s][0];
-            const vds = data.v_ds[b][s];
-            const id = data.i_d[b][s];
-            const ig = data.i_g[b][s];
+        console.log(`numBias=${numBias}, numSweeps=${numSweeps}, numPoints=${numPoints}`);
+
+        for ( let b = 0; b < numBias; b++ ) {
+            // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
+            const colBase = colorTo255Range(colormap(b, -1, numBias));
             
-            // key performance metrics (only do for first sweep):
-            if ( s === 0 ) {
-                const idMax = Math.max(...id);
-                const igMax = Math.max(...ig);
-                idMaxList.push(idMax.toExponential(2));
-                igMaxList.push(igMax.toExponential(2));
+            // add vgs bias
+            vgsList.push(data.v_gs[b][0][0]);
+
+            for ( let s = 0; s < numSweeps; s++ ) {
+                // make additional sweeps brighter for visibility
+                const col = colorBrighten(colBase, 0.6 + (s * 0.4));
+
+                const vgs = data.v_gs[b][s][0];
+                const vds = data.v_ds[b][s];
+                const id = data.i_d[b][s];
+                const ig = data.i_g[b][s];
+                
+                // key performance metrics (only do for first sweep):
+                if ( s === 0 ) {
+                    const idMax = Math.max(...id);
+                    const igMax = Math.max(...ig);
+                    idMaxList.push(idMax.toExponential(2));
+                    igMaxList.push(igMax.toExponential(2));
+                }
+
+                // create plot traces
+                tracesIdVds.push({
+                    name: `Vgs=${vgs}, Dir=${s}`,
+                    x: vds,
+                    y: id,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
+                
+                tracesIgVds.push({
+                    name: `Vgs=${vgs}, Dir=${s}`,
+                    x: vds,
+                    y: ig,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
+                });
             }
-
-            // create plot traces
-            tracesIdVds.push({
-                name: `Vgs=${vgs}, Dir=${s}`,
-                x: vds,
-                y: id,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
-            
-            tracesIgVds.push({
-                name: `Vgs=${vgs}, Dir=${s}`,
-                x: vds,
-                y: ig,
-                type: "scatter",
-                mode: "lines+markers",
-                marker: {color: `rgb(${col[0]},${col[1]},${col[2]})`},
-            });
         }
     }
 
