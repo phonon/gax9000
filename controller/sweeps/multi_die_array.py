@@ -53,7 +53,7 @@ def create_die_height_offset_interp2d(
         interp2d_fn = interp2d(x_vals, y_vals, dz_vals, kind="cubic")
 
         def die_dz_interp2d_func(x, y):
-            dz = np.maximum(0.0, interp2d_fn(x, y))
+            dz = np.minimum(0.0, interp2d_fn(x, y))
             if np.isscalar(dz):
                 return dz
             else:
@@ -194,6 +194,12 @@ class SweepMultiDieArray(MeasurementSweep):
 
             logging.info(f"Moving to die ({die_x}, {die_y})")
 
+            # get height for contact
+            if use_height_compensation:
+                dz = die_dz_interp2d(die_x, die_y)
+            else:
+                dz = 0
+            
             if instr_cascade is not None:
                 # move to die location and set home origin
                 if current_die_x != die_x or current_die_y != die_y:
@@ -218,11 +224,7 @@ class SweepMultiDieArray(MeasurementSweep):
                     gevent.sleep(0.5) # ensure small delay
 
                     # move contacts back down to contact device
-                    if use_height_compensation:
-                        dz = die_dz_interp2d(die_x, die_y)
-                        instr_cascade.move_to_contact_height_with_offset(dz)
-                    else:
-                        instr_cascade.move_contacts_down()
+                    instr_cascade.move_to_contact_height_with_offset(dz)
             
             if sweep_order == "row":
                 for ny, row in enumerate(range(initial_device_row, initial_device_row + num_rows)):
@@ -234,10 +236,14 @@ class SweepMultiDieArray(MeasurementSweep):
                             return
                         # move chuck by 1 col
                         if nx < (num_cols-1) and instr_cascade is not None:
+                            instr_cascade.move_contacts_up()
                             instr_cascade.move_chuck_relative_to_home(x=(nx+1)*device_dx, y=ny*device_dy)
+                            instr_cascade.move_to_contact_height_with_offset(dz)
                     # move chuck back to col 0, move up by 1 row
                     if ny < (num_rows-1) and instr_cascade is not None:
+                        instr_cascade.move_contacts_up()
                         instr_cascade.move_chuck_relative_to_home(x=0, y=(ny+1)*device_dy)
+                        instr_cascade.move_to_contact_height_with_offset(dz)
             elif sweep_order == "col":
                 for nx, col in enumerate(range(initial_device_col, initial_device_col + num_cols)):
                     for ny, row in enumerate(range(initial_device_row, initial_device_row + num_rows)):
@@ -248,10 +254,14 @@ class SweepMultiDieArray(MeasurementSweep):
                             return
                         # move chuck by 1 row
                         if ny < (num_rows-1) and instr_cascade is not None:
+                            instr_cascade.move_contacts_up()
                             instr_cascade.move_chuck_relative_to_home(x=nx*device_dx, y=(ny+1)*device_dy)
+                            instr_cascade.move_to_contact_height_with_offset(dz)
                     # move chuck back to row 0, move by 1 col
                     if nx < (num_cols-1) and instr_cascade is not None:
+                        instr_cascade.move_contacts_up()
                         instr_cascade.move_chuck_relative_to_home(x=(nx+1)*device_dx, y=0)
+                        instr_cascade.move_to_contact_height_with_offset(dz)
             else:
                 raise ValueError(f"Invalid sweep_order {sweep_order}, must be 'row' or 'col'")
         

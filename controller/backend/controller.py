@@ -258,7 +258,7 @@ class InstrumentCascade():
             dx_ = dx
             dy_ = dy
         
-        self.gpib.write(f"MoveChuck {dx_} {dy_} R Y 100")
+        self.gpib.write(f"MoveChuck {dx_} {dy_} R Y 100 N")
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
     
@@ -277,7 +277,7 @@ class InstrumentCascade():
         if timeout is not None:
             self.gpib.timeout = timeout * 1000.0
         
-        self.gpib.write(f"MoveChuck {x_} {y_} H Y 100")
+        self.gpib.write(f"MoveChuck {x_} {y_} H Y 100 N")
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
         
@@ -313,11 +313,27 @@ class InstrumentCascade():
     
     def move_to_contact_height_with_offset(self, dz: float):
         """Moves contacts down to touch device with some dz offset,
-        for height compensation.
-            `MoveChuckContact Velocity` (velocity = 100% default)
+        for height compensation:
+            `MoveChuckZ Z PosRef Unit Velocity`
+            Z: z height
+            PosRef: 
+                - Z: zero (default)
+                - H: contact
+                - R: current position
+            Unit:
+                - Y: micron (default)
+                - I: mils
+                - J: job
+            Velocity: velocity in percent (100 = default 100%)
+            Comp. level: compensation level
+                - D: default, uses one of four below
+                - T: technology + prober + offset (default)
+                - O: offset - use prober and offset
+                - P: prober compensation only
+                - N: no compensation
         """
-        # TODO
-        self.gpib.write(f"MoveChuckContact 50")
+        print(f"MOVE TO DZ {dz}")
+        self.gpib.write(f"MoveChuckZ {dz} H Y 50 N")
         self.gpib.read() # read required to flush response
         self.gpib.query("*OPC?")
     
