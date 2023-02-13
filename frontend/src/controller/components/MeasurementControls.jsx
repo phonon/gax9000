@@ -16,6 +16,8 @@ import {
 } from "@mui/material";
 import CodeMirror from  "@uiw/react-codemirror";
 import { json as codeMirrorJsonExtension } from "@codemirror/lang-json";
+import { StreamLanguage } from "@codemirror/language";
+import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { useEffect, useMemo } from "react";
 
 
@@ -154,9 +156,7 @@ const SynchronizedCodeMirrorEditor = ({
         theme="light"
         height="200px"
         minHeight="160px"
-        extensions={[
-            codeMirrorJsonExtension(),
-        ]}
+        extensions={[StreamLanguage.define(toml)]}
         onChange={(newValue, viewUpdate) => {
             if ( debug ) {
                 console.log("SynchronizedCodeMirrorEditor.onChange:", "localVal", localVal, "newValue", newValue);

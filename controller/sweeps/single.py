@@ -16,15 +16,16 @@ class SweepSingle(MeasurementSweep):
     def __str__(self) -> str:
         return self.__repr__()
 
-    def default_config():
+    def default_config_string():
         """Return default `sweep_config` argument in `run` as a dict."""
-        return {
-            "programs": [],
-        }
+        return """
+            programs = []
+        """
     
     def run(
         user,
         sweep_config,
+        sweep_config_string,
         sweep_save_data,
         initial_die_x,
         initial_die_y,
@@ -36,7 +37,6 @@ class SweepSingle(MeasurementSweep):
         device_dy,
         data_folder,
         programs,
-        program_configs,
         instr_b1500=None,
         instr_cascade=None,
         monitor_channel=None,
@@ -49,7 +49,7 @@ class SweepSingle(MeasurementSweep):
         sweep_metadata = MeasurementSweep.save_metadata(
             user=user,
             sweep_name=SweepSingle.name,
-            sweep_config=sweep_config,
+            sweep_config_string=sweep_config_string,
             initial_die_x=initial_die_x,
             initial_die_y=initial_die_y,
             die_dx=die_dx,
@@ -62,10 +62,9 @@ class SweepSingle(MeasurementSweep):
             save_dir=save_dir,
             save_data=sweep_save_data,
             programs=programs,
-            program_configs=program_configs,
         )
 
-        for pr, pr_config in zip(programs, program_configs):
+        for pr in programs:
             MeasurementSweep.run_single(
                 instr_b1500=instr_b1500,
                 monitor_channel=monitor_channel,
@@ -75,7 +74,6 @@ class SweepSingle(MeasurementSweep):
                 save_dir=save_dir,
                 save_data=sweep_save_data,
                 program=pr,
-                program_config=pr_config,
             )
 
             # yields thread for other tasks (so data gets pushed)

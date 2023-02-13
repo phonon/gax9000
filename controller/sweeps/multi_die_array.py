@@ -75,23 +75,25 @@ class SweepMultiDieArray(MeasurementSweep):
     def __str__(self) -> str:
         return self.__repr__()
     
-    def default_config():
+    def default_config_string():
         """Return default `sweep_config` argument in `run` as a dict."""
-        return {
-            "dies": [
+        return """
+            dies = [
                 [0, 0],
-            ],
-            "height_compensation_file": None,
-            "array": {
-                "num_rows": 1,
-                "num_cols": 1,
-                "sweep_order": "row",
-            },
-        }
+            ]
+
+            # height_compensation_file = "height_offset.toml"
+            
+            [array]
+            num_rows = 1
+            num_cols = 1
+            sweep_order = "row"
+        """
     
     def run(
         user,
         sweep_config,
+        sweep_config_string,
         sweep_save_data,
         initial_die_x,
         initial_die_y,
@@ -103,7 +105,6 @@ class SweepMultiDieArray(MeasurementSweep):
         device_dy,
         data_folder,
         programs,
-        program_configs,
         instr_b1500=None,
         instr_cascade=None,
         monitor_channel=None,
@@ -143,7 +144,7 @@ class SweepMultiDieArray(MeasurementSweep):
             sweep_metadata = MeasurementSweep.save_metadata(
                 user=user,
                 sweep_name=SweepMultiDieArray.name,
-                sweep_config=sweep_config,
+                sweep_config_string=sweep_config_string,
                 initial_die_x=initial_die_x,
                 initial_die_y=initial_die_y,
                 die_dx=die_dx,
@@ -156,10 +157,9 @@ class SweepMultiDieArray(MeasurementSweep):
                 save_dir=save_dir,
                 save_data=sweep_save_data,
                 programs=programs,
-                program_configs=program_configs,
             )
 
-            for pr, pr_config in zip(programs, program_configs):
+            for pr in programs:
                 logging.info(f"[row={row}, col={col}] Running {pr.name}...")
                 MeasurementSweep.run_single(
                     instr_b1500=instr_b1500,
@@ -170,7 +170,6 @@ class SweepMultiDieArray(MeasurementSweep):
                     save_dir=save_dir,
                     save_data=sweep_save_data,
                     program=pr,
-                    program_config=pr_config,
                 )
 
                 # yields thread for other tasks (so data gets pushed)

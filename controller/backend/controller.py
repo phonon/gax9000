@@ -9,14 +9,16 @@ import os
 import logging
 import traceback
 import json
+import tomli
 import gevent
 from gevent.lock import BoundedSemaphore
 import pyvisa
 from flask_restful import Api, Resource, reqparse
 from controller.sse import EventChannel
 from controller.programs import MEASUREMENT_PROGRAMS, MeasurementProgram
-from controller.sweeps import MEASUREMENT_SWEEPS, MeasurementSweep
+from controller.sweeps import MEASUREMENT_SWEEPS, MeasurementSweep, RunMeasurementProgram
 from controller.util import SignalCancelTask
+from controller.util.string import strip_leading_whitespace
 
 
 class UserGlobalSettings():
@@ -487,7 +489,7 @@ class Controller():
             self.save_user_settings()
             gevent.sleep(10.0) # currently hardcoded save every 10s
     
-    def set_user_setting(self, user, setting, value):
+    def set_user_setting(self, user: str, setting: str, value):
         """Set user global setting.
         This will mark the user settings as dirty.
         """
@@ -500,8 +502,12 @@ class Controller():
         else:
             logging.warn(f"set_user_setting() Invalid user: {user}")
     
-    def get_measurement_program_config(self, username, program):
-        """Get measurement program config for user and program.
+    def get_measurement_program_config_string(
+        self,
+        username: str,
+        program: str,
+    ) -> str:
+        """Get measurement program config string for user and program.
         Returns either user's current program config, or generates new
         default config for the program.
         """
@@ -512,37 +518,57 @@ class Controller():
             if not os.path.exists(path_user_programs):
                 os.makedirs(path_user_programs)
             
-            path_program = os.path.join(path_user_programs, program + ".json")
+            path_program = os.path.join(path_user_programs, program + ".toml")
             if os.path.exists(path_program):
                 with open(path_program, "r") as f:
-                    return json.load(f)
+                    return f.read()
             else: # generate default user settings
-                logging.info(f"Creating default program {program}.json config for {username} at: {path_program}")
-                config = MeasurementProgram.get(program).default_config()
+                logging.info(f"Creating default program {program}.toml config for {username} at: {path_program}")
+                config_str = MeasurementProgram.get(program).default_config_string()
+                config_str = strip_leading_whitespace(config_str) # strip leading whitespace on all lines
                 with open(path_program, "w+") as f:
-                    json.dump(config, f, indent=2)
-                return config
+                    f.write(config_str)
+                return config_str
 
         return None
 
-    def set_measurement_program_config(self, username, program, config):
+    def get_measurement_program_config(
+        self,
+        username: str,
+        program: str,
+    ) -> dict:
+        """Get measurement program config dict for user and program as dict.
+        Re-uses get_measurement_program_config_string() to get the config string,
+        then parses it as a toml.
+        """
+        config_str = self.get_measurement_program_config_string(username, program)
+        if config_str is not None:
+            return tomli.loads(config_str)
+
+    def set_measurement_program_config(
+        self,
+        username: str,
+        program: str,
+        config_str: str,
+    ):
         """Set measurement program config for user and program."""
-        print(username, program, config)
+        print(username, program, config_str)
         if username in self.users:
             # get/create program config path if it does not exist
             path_user_programs = os.path.join(self.path_users, username, "program")
             if not os.path.exists(path_user_programs):
                 os.makedirs(path_user_programs)
             
-            path_program = os.path.join(path_user_programs, program + ".json")
+            path_program = os.path.join(path_user_programs, program + ".toml")
             with open(path_program, "w+") as f:
-                if isinstance(config, str):
-                    f.write(config)
-                else:
-                    json.dump(config, f, indent=2)
+                f.write(config_str)
     
-    def get_measurement_sweep_config(self, username, sweep):
-        """Get measurement program config for user and program.
+    def get_measurement_sweep_config_string(
+        self,
+        username: str,
+        sweep: str,
+    ) -> str:
+        """Get measurement sweep config for user and program.
         Returns either user's current sweep config, or generates new
         default config for the sweep.
         """
@@ -552,19 +578,33 @@ class Controller():
             if not os.path.exists(path_user_sweeps):
                 os.makedirs(path_user_sweeps)
             
-            path_sweep = os.path.join(path_user_sweeps, sweep + ".json")
+            path_sweep = os.path.join(path_user_sweeps, sweep + ".toml")
             if os.path.exists(path_sweep):
                 with open(path_sweep, "r") as f:
-                    return json.load(f)
+                    return f.read()
             else: # generate default user settings
-                logging.info(f"Creating default sweep {sweep}.json config for {username} at: {path_sweep}")
-                config = MeasurementSweep.get(sweep).default_config()
+                logging.info(f"Creating default sweep {sweep}.toml config for {username} at: {path_sweep}")
+                config_str = MeasurementSweep.get(sweep).default_config_string()
+                config_str = strip_leading_whitespace(config_str) # strip leading whitespace on all lines
                 with open(path_sweep, "w+") as f:
-                    json.dump(config, f, indent=2)
-                return config
+                    f.write(config_str)
+                return config_str
 
         return None
 
+    def get_measurement_sweep_config(
+        self,
+        username: str,
+        sweep: str,
+    ) -> dict:
+        """Get measurement sweep config for user and program.
+        Returns either user's current sweep config, or generates new
+        default config for the sweep.
+        """
+        config_str = self.get_measurement_sweep_config_string(username, sweep)
+        if config_str is not None:
+            return tomli.loads(config_str)
+    
     def set_measurement_sweep_config(self, username, sweep, config):
         """Set measurement program config for user and program."""
         print(username, sweep, config)
@@ -593,10 +633,10 @@ class Controller():
         device_dx: float,
         device_dy: float,
         data_folder: str,
-        programs: list[MeasurementProgram],
-        program_configs: list[dict],
+        programs: list[RunMeasurementProgram],
         sweep: MeasurementSweep,
         sweep_config: dict,
+        sweep_config_string: str,
         sweep_save_data: bool,
         sweep_save_image: bool,
         callback: Callable,
@@ -613,19 +653,11 @@ class Controller():
         print("device_dy =", device_dy)
         print("data_folder =", data_folder)
         print("programs =", programs)
-        print("program_configs =", program_configs)
         print("sweep =", sweep)
         print("sweep_config =", sweep_config)
+        print("sweep_config_string =", sweep_config_string)
         print("sweep_save_data =", sweep_save_data)
         print("sweep_save_image =", sweep_save_image)
-        
-        if len(programs) != len(program_configs):
-            raise ValueError(f"`programs` (len={len(programs)}) and `program_configs` (len={len(program_configs)}) must be same length")
-        
-        # save sweep config and program configs to disk to cache
-        self.set_measurement_sweep_config(user, sweep.name, sweep_config)
-        for pr, pr_config in zip(programs, program_configs):
-            self.set_measurement_program_config(user, pr.name, pr_config)
 
         # verify data folder exists
         if sweep_save_data and not os.path.exists(data_folder):
@@ -636,8 +668,8 @@ class Controller():
         # inject global settings into program configs:
         # - smu slot settings
         if len(self.settings.smu_slots) > 0:
-            for pr_config in program_configs:
-                pr_config["smu_slots"] = self.settings.smu_slots
+            for pr in programs:
+                pr.config["smu_slots"] = self.settings.smu_slots
     
         # try acquire instrument task lock
         if self.task_lock.acquire(blocking=False, timeout=None):
@@ -660,6 +692,7 @@ class Controller():
                         instr_cascade=self.instrument_cascade,
                         user=user,
                         sweep_config=sweep_config,
+                        sweep_config_string=sweep_config_string,
                         sweep_save_data=sweep_save_data,
                         die_dx=die_dx,
                         die_dy=die_dy,
@@ -671,7 +704,6 @@ class Controller():
                         initial_device_col=initial_device_col,
                         data_folder=data_folder,
                         programs=programs,
-                        program_configs=program_configs,
                         monitor_channel=self.monitor_channel,
                         signal_cancel=self.signal_cancel_task,
                     )
@@ -779,35 +811,47 @@ class ControllerApiHandler(Resource):
         print("sweep_config =", sweep_config)
         print("sweep_save_data =", sweep_save_data)
 
-        # get programs
-        instr_programs = []
-        for pr in programs:
+        # make sure number of programs and program configs is the same
+        if len(programs) != len(program_configs):
+            logging.error("Number of programs and program configs is not the same")
+            return self.signal_measurement_failed("Number of programs and program configs is not the same")
+
+        # parse program configs
+        run_programs: list[RunMeasurementProgram] = []
+        for pr, pr_config in zip(programs, program_configs):
             instr_program = MeasurementProgram.get(pr)
             if instr_program is None:
                 logging.error(f"Invalid program: {pr}")
                 return self.signal_measurement_failed(f"Invalid program: {pr}")
-            instr_programs.append(instr_program)
-        
-        # parse program config and sweep config
-        instr_program_configs = []
-        for pr_config in program_configs:
+            
             try:
-                program_config_dict = json.loads(pr_config)
+                program_config_dict = tomli.loads(pr_config)
             except Exception as err:
                 logging.error(f"Invalid program config: {err}")
-                return self.signal_measurement_failed("Invalid program config")
-            instr_program_configs.append(program_config_dict)
+                return self.signal_measurement_failed(f"Invalid program config for {pr}: {pr_config}")
+            
+            run_programs.append(RunMeasurementProgram(
+                program = instr_program,
+                config = program_config_dict,
+                config_string = pr_config,
+            ))
         
-        # get sweep
+        # get sweep and parse sweep config
         instr_sweep = MeasurementSweep.get(sweep)
         if instr_sweep is None:
             logging.error(f"Invalid sweep type: {sweep}")
             return self.signal_measurement_failed(f"Invalid sweep: {sweep}")
         try:
-            sweep_config_dict = json.loads(sweep_config)
+            sweep_config_dict = tomli.loads(sweep_config)
         except Exception as err:
             logging.error(f"Invalid sweep config: {err}")
             return self.signal_measurement_failed("Invalid sweep config")
+        
+        # passed program and sweep config validation/parsing,
+        # save sweep config and program configs to disk to cache settings
+        self.set_measurement_sweep_config(user, instr_sweep.name, sweep_config)
+        for pr in run_programs:
+            self.set_measurement_program_config(user, pr.name, pr.config_string)
         
         # run internal measurement task
         self.controller.run_measurement(
@@ -821,10 +865,10 @@ class ControllerApiHandler(Resource):
             device_dx=device_dx,
             device_dy=device_dy,
             data_folder=data_folder,
-            programs=instr_programs,
-            program_configs=instr_program_configs,
+            programs=run_programs,
             sweep=instr_sweep,
             sweep_config=sweep_config_dict,
+            sweep_config_string=sweep_config,
             sweep_save_data=sweep_save_data,
             sweep_save_image=sweep_save_image,
             callback=self.signal_measurement_finished,
@@ -916,42 +960,67 @@ class ControllerApiHandler(Resource):
             },
         })
     
-    def set_user_setting(self, user, setting, value):
+    def set_user_setting(
+        self,
+        user: str,
+        setting: str,
+        value,
+    ):
         """Update a user setting to new value."""
         self.controller.set_user_setting(user, setting, value)
     
-    def get_measurement_program_config(self, user, program, index):
+    def get_measurement_program_config(
+        self,
+        user: str,
+        program: str,
+        index: int,
+    ):
         """Get measurement program config for user and program."""
-        config = self.controller.get_measurement_program_config(user, program)
-        if config is not None:
+        config_str = self.controller.get_measurement_program_config_string(user, program)
+        if config_str is not None:
             self.channel.publish({
                 "msg": "measurement_program_config",
                 "data": {
                     "name": program,
                     "index": index,
-                    "config": config,
+                    "config": config_str,
                 },
             })
 
-    def set_measurement_program_config(self, user, program, config):
+    def set_measurement_program_config(
+        self,
+        user: str,
+        program: str,
+        config_str: str,
+    ):
         """Set measurement program config for user and program."""
-        config = self.controller.set_measurement_program_config(user, program, config)
-    
-    def get_measurement_sweep_config(self, user, sweep):
-        """Get measurement program config for user and program."""
-        config = self.controller.get_measurement_sweep_config(user, sweep)
-        if config is not None:
+        self.controller.set_measurement_program_config(user, program, config_str)
+
+    def get_measurement_sweep_config(
+        self,
+        user: str,
+        sweep: str,
+    ):
+        """Get measurement program config for user and program and
+        push data back to event channel."""
+        config_str = self.controller.get_measurement_sweep_config_string(user, sweep)
+        if config_str is not None:
             self.channel.publish({
                 "msg": "measurement_sweep_config",
                 "data": {
                     "name": sweep,
-                    "config": config,
+                    "config": config_str,
                 },
             })
 
-    def set_measurement_sweep_config(self, user, sweep, config):
+    def set_measurement_sweep_config(
+        self,
+        user: str,
+        sweep: str,
+        config: str,
+    ):
         """Set measurement program config for user and program."""
-        config = self.controller.set_measurement_sweep_config(user, sweep, config)
+        self.controller.set_measurement_sweep_config(user, sweep, config)
 
     def move_chuck_relative(self, dx, dy):
         """Move chuck relative to current position."""

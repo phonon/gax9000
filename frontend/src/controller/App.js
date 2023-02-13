@@ -78,12 +78,12 @@ const App = ({
     // measurement program settings
     const [measurementProgramTypes, setMeasurementProgramTypes] = useState([]); // dropdown list of all measurement programs names
     const [measurementPrograms, setMeasurementPrograms] = useState([            // list of user selected measurement programs
-        new MeasurementProgram("", "{}"), // default empty measurement program
+        new MeasurementProgram("", ""), // default empty measurement program
     ]);
 
     // sweep settings
     const [sweepTypes, setSweepTypes] = useState([]);
-    const [sweep, setSweep] = useState(new Sweep("", "{}")); // sweep config object
+    const [sweep, setSweep] = useState(new Sweep("", "")); // sweep config object
     const [sweepSaveData, setSweepSaveData] = useState(true);
     const [sweepSaveImage, setSweepSaveImage] = useState(true);
     
@@ -99,7 +99,7 @@ const App = ({
     // Function to add a new program to end of programs list
     const addMeasurementProgram = () => {
         const newPrograms = [...measurementPrograms];
-        newPrograms.push(new MeasurementProgram("", "{}"));
+        newPrograms.push(new MeasurementProgram("", ""));
         refMeasurementPrograms.current = newPrograms;
         setMeasurementPrograms(newPrograms);
     };
@@ -226,13 +226,12 @@ const App = ({
         });
         responseHandlers.set("measurement_program_config", ({name, index, config}) => {
             const newPrograms = [...refMeasurementPrograms.current];
-            const configStr = JSON.stringify(config, null, 2);
-            newPrograms[index] = new MeasurementProgram(name, configStr);
+            newPrograms[index] = new MeasurementProgram(name, config);
             refMeasurementPrograms.current = newPrograms;
             setMeasurementPrograms(newPrograms);
         });
         responseHandlers.set("measurement_sweep_config", ({name, config}) => {
-            setSweep(new Sweep(name, JSON.stringify(config, null, 2)));
+            setSweep(new Sweep(name, config));
         });
         responseHandlers.set("measurement_error", ({error}) => {
             console.error("Measurement failed error", error);

@@ -3,6 +3,7 @@ Define interface for measurement programs on B1500.
 """
 from __future__ import annotations
 import logging
+import tomli
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import Iterator, Tuple
@@ -49,10 +50,15 @@ class MeasurementProgram(ABC):
 
     @staticmethod
     @abstractmethod
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {}
-
+    def default_config_string() -> str:
+        """Return default `run` arguments config as a toml string."""
+        return ""
+    
+    def default_config(self) -> dict:
+        """Return default `run` arguments config as a dict. Returns and
+        parses this class's default config string as toml."""
+        return tomli.loads(self.__class__.default_config_string())
+    
     @staticmethod
     @abstractmethod
     def run(**kwargs) -> MeasurementResult:

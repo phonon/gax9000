@@ -29,11 +29,11 @@ class ProgramDebug(MeasurementProgram):
 
     name = "debug"
     
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "v_gs": [0, 1, 2, 3, 4, 5, 6, 7],
-        }
+    def default_config_string() -> str:
+        """Return default `run` arguments config as a toml format string."""
+        return """
+            v_gs = [0, 1, 2, 3, 4, 5, 6, 7]
+        """
     
     def run(
         v_gs=[0, 1, 2, 3, 4, 5, 6, 7],
@@ -92,11 +92,11 @@ class ProgramDebugMultistep(MeasurementProgram):
 
     name = "debug_multistep"
     
-    def default_config():
+    def default_config_string() -> str:
         """Return default `run` arguments config as a dict."""
-        return {
-            "v_gs": [0, 1, 2, 3, 4, 5, 6, 7],
-        }
+        return """
+            v_gs = [0, 1, 2, 3, 4, 5, 6, 7]
+        """
     
     def run(
         monitor_channel: EventChannel = None,

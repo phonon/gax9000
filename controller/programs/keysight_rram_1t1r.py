@@ -563,31 +563,30 @@ class ProgramKeysightRram1T1R(MeasurementProgram):
 
         return bias_configs
 
-    def default_config():
-        """Return default `run` arguments config as a dict.
-        Note: values based on a BE device with PMOS access.
+    def default_config_string() -> str:
+        """Note: values based on a BE device with PMOS access.
         """
-        return {
-            "probe_wl": 1,
-            "probe_sl": 4,
-            "probe_bl": 8,
-            "probe_sub": 9,
-            "v_sub": 0,
-            "v_s_form": 0.0,
-            "v_d_form": 2.5,
-            "v_g_form": -0.6,
-            "v_s_reset": 0.0,
-            "v_d_reset": -2.0,
-            "v_g_reset": -1.5,
-            "v_s_set": 0.0,
-            "v_d_set": 2.0,
-            "v_g_set": -0.6,
-            "v_step": 0.1,
-            "i_compliance_form": 10e-3,
-            "i_compliance_set": 10e-3,
-            "i_compliance_reset": 10e-3,
-            "sequence": "frs",
-        }
+        return """
+            probe_wl = 1
+            probe_sl = 4
+            probe_bl = 8
+            probe_sub = 9
+            v_sub = 0
+            v_s_form = 0.0
+            v_d_form = 2.5
+            v_g_form = -0.6
+            v_s_reset = 0.0
+            v_d_reset = -2.0
+            v_g_reset = -1.5
+            v_s_set = 0.0
+            v_d_set = 2.0
+            v_g_set = -0.6
+            v_step = 0.1
+            i_compliance_form = 1e-3
+            i_compliance_set = 1e-3
+            i_compliance_reset = 1e-3
+            sequence = "frs"
+        """
 
     def run(
         instr_b1500=None,
@@ -832,21 +831,20 @@ class ProgramKeysightRram1T1RSweep(MeasurementProgram):
         return bias_configs, num_points_max
     
     @staticmethod
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_wl": 1,
-            "probe_sl": 4,
-            "probe_bl": 8,
-            "probe_sub": 9,
-            "v_sub": 0.0,
-            "v_s": 0.0,
-            "v_g_reset": -1.0,
-            "v_d_reset": -2.0,
-            "v_g_range": [0.4, 0.6, 0.8],
-            "v_d_range": [1.0, 1.5, 2.5],
-            "v_step": 0.1,
-        }
+    def default_config_string() -> str:
+        return """
+            probe_wl = 1
+            probe_sl = 4
+            probe_bl = 8
+            probe_sub = 9
+            v_sub = 0.0
+            v_s = 0.0
+            v_g_reset = -1.0
+            v_d_reset = -2.0
+            v_g_range = [0.4, 0.6, 0.8]
+            v_d_range = [1.0, 1.5, 2.5]
+            v_step = 0.1
+        """
     
     def run(
         instr_b1500=None,
@@ -1057,21 +1055,22 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         return bias_configs, num_points_max
 
     @staticmethod
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_wl": 1,
-            "probe_bl": 4,
-            "probe_sl": 8,
-            "probe_sub": 9,
-            "codes": {
-                "reset": {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": -3.0},
-                "read":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 0.5},
-                "set1":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.0},
-                "set2":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.5},
-                "set3":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 3.0},
-            },
-            "sequence": [
+    def default_config_string() -> str:
+        return """
+            probe_wl = 1
+            probe_bl = 4
+            probe_sl = 8
+            probe_sub = 9
+            
+            [codes]
+            reset = { v_sub = 0.0, v_sl = 0.0, v_wl = 0.0, v_bl = -3.0 }
+            read =  { v_sub = 0.0, v_sl = 0.0, v_wl = 0.0, v_bl = 0.5 }
+            set1 =  { v_sub = 0.0, v_sl = 0.0, v_wl = 0.0, v_bl = 2.0 }
+            set2 =  { v_sub = 0.0, v_sl = 0.0, v_wl = 0.0, v_bl = 2.5 }
+            set3 =  { v_sub = 0.0, v_sl = 0.0, v_wl = 0.0, v_bl = 3.0 }
+            
+            [sequence]
+            codes = [
                 "reset",  # bit = 0
                 "read",
                 "set1",   # bit = 1
@@ -1084,8 +1083,8 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
                 "read",
                 "set3",   # bit = 3
                 "read",
-            ],
-        }
+            ]
+        """
     
     def run(
         instr_b1500=None,
@@ -1105,20 +1104,22 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
             "set2":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 2.5},
             "set3":  {"v_sub": 0.0, "v_sl": 0.0, "v_wl": 0.0, "v_bl": 3.0},
         },
-        sequence=[
-            "reset",  # bit = 0
-            "read",
-            "set1",   # bit = 1
-            "read",
-            "reset",  # bit = 0
-            "read",
-            "set2",   # bit = 2
-            "read",
-            "reset",  # bit = 0
-            "read",
-            "set3",   # bit = 3
-            "read",
-        ],
+        sequence={
+            "codes": [
+                "reset",  # bit = 0
+                "read",
+                "set1",   # bit = 1
+                "read",
+                "reset",  # bit = 0
+                "read",
+                "set2",   # bit = 2
+                "read",
+                "reset",  # bit = 0
+                "read",
+                "set3",   # bit = 3
+                "read",
+            ]
+        },
         repeat=1,
         v_step=0.1,                # voltage step for drain sweeps
         i_d_compliance=10e-3,      # ideally compliance should never hit (transistor should prevent)
@@ -1161,7 +1162,7 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
         # parse voltage sweep ranges into list of sweep bias configs
         bias_configs, num_points_max = ProgramKeysightRram1T1RSequence.parse_sweep_sequence(
             codes=codes,
-            sequence=sequence,
+            sequence=sequence["codes"],
             v_step=v_step,
         )
         num_sequences = len(bias_configs)
@@ -1259,7 +1260,7 @@ class ProgramKeysightRram1T1RSequence(MeasurementProgram):
 
 
 class ProgramKeysightRram1T1RPulsedForm(MeasurementProgram):
-    """Implement 1T1R pulsed form sweep using bitline voltage at a fixed
+    """TODO: Implement 1T1R pulsed form sweep using bitline voltage at a fixed
     gate bias:
 
             Vform
@@ -1292,23 +1293,22 @@ class ProgramKeysightRram1T1RPulsedForm(MeasurementProgram):
     name = "keysight_rram_1t1r_pulsed_form"
 
     @staticmethod
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_wl": 1,
-            "probe_sl": 4,
-            "probe_bl": 8,
-            "probe_sub": 9,
-            "v_sub": 0,
-            "v_s_form": 0.0,
-            "v_d_form": 2.5,
-            "v_g_form": -0.6,
-            "v_s_read": 0.0,
-            "v_d_read": 0.5,
-            "v_g_read": -1.0,
-            "repeat": 1,
-            "v_step": 0.1,
-        }
+    def default_config_string() -> str:
+        return """
+            probe_wl = 1
+            probe_sl = 4
+            probe_bl = 8
+            probe_sub = 9
+            v_sub = 0
+            v_s_form = 0.0
+            v_d_form = 2.5
+            v_g_form = -0.6
+            v_s_read = 0.0
+            v_d_read = 0.5
+            v_g_read = -1.0
+            repeat = 1
+            v_step = 0.1
+        """
     
     def run(
         instr_b1500=None,

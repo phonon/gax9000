@@ -293,23 +293,18 @@ class ProgramKeysightIdVgs(MeasurementProgram):
     """
     name = "keysight_id_vgs"
 
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_gate": 1,
-            "probe_source": 8,
-            "probe_drain": 4,
-            "probe_sub": 9,
-            "v_gs": {
-                "start": -1.2,
-                "stop": 1.2,
-                "step": 0.1,
-            },
-            "v_ds": [-0.05, -1.2],
-            "v_sub": 0.0,
-            "negate_id": True,
-            "sweep_direction": "fr",
-        }
+    def default_config_string() -> str:
+        return """
+            probe_gate = 1
+            probe_source = 8
+            probe_drain = 4
+            probe_sub = 9
+            v_gs = { start = -1.2, stop = 1.2, step = 0.1 }
+            v_ds = [-0.05, -1.2]
+            v_sub = 0.0
+            negate_id = true
+            sweep_direction = "fr"
+        """
 
     def run(
         instr_b1500=None,
@@ -628,27 +623,18 @@ class ProgramKeysightIdVds(MeasurementProgram):
 
     name = "keysight_id_vds"
 
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_gate": 1,
-            "probe_source": 8,
-            "probe_drain": 4,
-            "probe_sub": 9,
-            "v_gs": {
-                "start": 0.0,
-                "stop": -1.2,
-                "step": 0.4,
-            },
-            "v_ds": {
-                "start": 0.0,
-                "stop": -2.0,
-                "step": 0.1,
-            },
-            "v_sub": 0.0,
-            "negate_id": True,
-            "sweep_direction": "fr",
-        }
+    def default_config_string() -> str:
+        return """
+            probe_gate = 1
+            probe_source = 8
+            probe_drain = 4
+            probe_sub = 9
+            v_gs = { start = 0.0, stop = -1.2, step = 0.4 }
+            v_ds = { start = 0.0, stop = -2.0, step = 0.1 }
+            v_sub = 0.0
+            negate_id = true
+            sweep_direction = "fr"
+        """
     
     def run(
         instr_b1500=None,
@@ -947,25 +933,20 @@ class ProgramKeysightIdVgsPulsedDC(MeasurementProgram):
     """
     name = "keysight_id_vgs_pulsed_dc"
 
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_gate": 1,
-            "probe_source": 8,
-            "probe_drain": 4,
-            "probe_sub": 9,
-            "v_gs": {
-                "start": -1.2,
-                "stop": 1.2,
-                "step": 0.1,
-            },
-            "v_ds": [-0.05, -1.2],
-            "v_sub": 0.0,
-            "negate_id": True,
-            "sweep_direction": "fr",
-            "pulse_width": 0.0010,
-            "pulse_period": 0.010,
-        }
+    def default_config_string() -> str:
+        return """
+            probe_gate = 1
+            probe_source = 8
+            probe_drain = 4
+            probe_sub = 9
+            v_gs = { start = -1.2, stop = 1.2, step = 0.1 }
+            v_ds = [-0.05, -1.2]
+            v_sub = 0.0
+            negate_id = true
+            sweep_direction = "fr"
+            pulse_width = 0.0010
+            pulse_period = 0.010
+        """
 
     def run(
         **kwargs,
@@ -980,29 +961,20 @@ class ProgramKeysightIdVdsPulsedDC(MeasurementProgram):
     """
     name = "keysight_id_vds_pulsed_dc"
 
-    def default_config():
-        """Return default `run` arguments config as a dict."""
-        return {
-            "probe_gate": 1,
-            "probe_source": 8,
-            "probe_drain": 4,
-            "probe_sub": 9,
-            "v_gs": {
-                "start": 0.0,
-                "stop": -1.2,
-                "step": 0.4,
-            },
-            "v_ds": {
-                "start": 0.0,
-                "stop": -2.0,
-                "step": 0.1,
-            },
-            "v_sub": 0.0,
-            "negate_id": True,
-            "sweep_direction": "fr",
-            "pulse_width": 0.0005,
-            "pulse_period": 0.010,
-        }
+    def default_config_string() -> str:
+        return """
+            probe_gate = 1
+            probe_source = 8
+            probe_drain = 4
+            probe_sub = 9
+            v_gs = { start = 0.0, stop = -1.2, step = 0.4 }
+            v_ds = { start = 0.0, stop = -2.0, step = 0.1 }
+            v_sub = 0.0
+            negate_id = true
+            sweep_direction = "fr"
+            pulse_width = 0.0005
+            pulse_period = 0.010
+        """
 
     def run(
         **kwargs,
