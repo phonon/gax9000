@@ -1,0 +1,9 @@
+# test for defining a sweep list of modules in an external toml config file,
+# for use with "modules" type sweep.
+[sweep]
+modules = [
+    "module1",
+    "module2",
+    "module3",
+    "module4",
+]

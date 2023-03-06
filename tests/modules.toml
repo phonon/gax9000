@@ -1,0 +1,7 @@
+# test for defining dictionary of modules in an external toml config file,
+# for use with "modules" type sweep.
+[modules]
+module1 = { name = "module1", x = 0, y = 0 }
+module2 = { name = "module2", x = 100, y = 0 }
+module3 = { name = "module3", x = 200, y = 0 }
+module4 = { name = "module4", x = 300, y = 0 }

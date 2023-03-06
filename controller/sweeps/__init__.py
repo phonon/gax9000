@@ -16,6 +16,7 @@ from controller.util.io import export_hdf5, export_mat
 # list of available sweep types (hardcoded)
 MEASUREMENT_SWEEPS = [
     "array",
+    "modules",
     "multi_die_array",
     "single",
 ]
@@ -45,6 +46,9 @@ class MeasurementSweep(ABC):
         if s == "array":
             from controller.sweeps.array import SweepArray
             return SweepArray
+        elif s == "modules":
+            from controller.sweeps.modules import SweepModules
+            return SweepModules
         elif s == "multi_die_array":
             from controller.sweeps.multi_die_array import SweepMultiDieArray
             return SweepMultiDieArray
