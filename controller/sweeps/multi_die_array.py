@@ -1,10 +1,8 @@
 import os
 import logging
-import json
 import gevent
 from controller.sweeps import MeasurementSweep
-from controller.util import timestamp, dict_np_array_to_json_array
-from controller.util.io import export_hdf5, export_mat
+from controller.util import timestamp
 
 def create_die_height_offset_interp2d(
     path_die_measurements: str,

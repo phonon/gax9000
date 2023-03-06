@@ -18,6 +18,7 @@ MEASUREMENT_SWEEPS = [
     "array",
     "modules",
     "multi_die_array",
+    "multi_die_modules",
     "single",
 ]
 
@@ -52,6 +53,9 @@ class MeasurementSweep(ABC):
         elif s == "multi_die_array":
             from controller.sweeps.multi_die_array import SweepMultiDieArray
             return SweepMultiDieArray
+        elif s == "multi_die_modules":
+            from controller.sweeps.multi_die_modules import SweepMultiDieModules
+            return SweepMultiDieModules
         elif s == "single":
             from controller.sweeps.single import SweepSingle
             return SweepSingle

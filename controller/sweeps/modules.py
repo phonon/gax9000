@@ -1,13 +1,10 @@
 """
 Sweep by modules.
 """
-import os
 import logging
-import json
 import gevent
 from controller.sweeps import MeasurementSweep
-from controller.util import timestamp, dict_np_array_to_json_array
-from controller.util.io import export_hdf5, export_mat
+from controller.util import timestamp
 
 
 def load_modules_from_toml(modules_file: str) -> dict:
@@ -87,11 +84,11 @@ class SweepModules(MeasurementSweep):
         # print(f"modules: {modules}, sweep: {sweep}")
 
         # create closure here to simplify passing arguments
-        def run_inner(module_str):
-            """Run measurement at a (row, col) device in the device array.
-            `row_col_str` indicates sweep order:
-            - sweep_order = "row": Sweep cols in row, then change row. str is "r0_c0", "r0_c1", ...
-            - sweep_order = "col": Sweep rows in col, then change col. str is "c0_r0", "c0_r1", ...
+        def run_inner(
+            module_str: str,
+        ):
+            """Run measurement at a named module device.
+            - `module_str`: module name (mainly as metadata).
             """
             t_measurement = timestamp()
             save_dir = f"gax_{module_str}_{t_measurement}"
