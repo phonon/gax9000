@@ -47,8 +47,15 @@ def create_die_height_offset_interp2d(
         #     dz_vals,
         # )
 
+        ### DEBUG
+        # print(x_vals)
+        # print(y_vals)
+        # print(dz_vals)
+
         # just use scipy.interpolate.interp2d (fits coefficients)
-        interp2d_fn = interp2d(x_vals, y_vals, dz_vals, kind="cubic")
+        # using linear instead of cubic, because cubic function often does not
+        # match exact height values sampled at die locations
+        interp2d_fn = interp2d(x_vals, y_vals, dz_vals, kind="linear")
 
         def die_dz_interp2d_func(x, y):
             dz = np.minimum(0.0, interp2d_fn(x, y))
