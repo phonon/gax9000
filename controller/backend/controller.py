@@ -614,12 +614,12 @@ class Controller():
             if not os.path.exists(path_user_sweeps):
                 os.makedirs(path_user_sweeps)
             
-            path_sweep = os.path.join(path_user_sweeps, sweep + ".json")
+            path_sweep = os.path.join(path_user_sweeps, sweep + ".toml")
             with open(path_sweep, "w+") as f:
                 if isinstance(config, str):
                     f.write(config)
                 else:
-                    json.dump(config, f, indent=2)
+                    f.write(str(config))
         
     def run_measurement(
         self,
