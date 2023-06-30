@@ -324,6 +324,8 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         v_sub=0.0,
         negate_id=True,
         sweep_direction="fr",
+        id_compliance=0.010, # 10 mA drain complience
+        ig_compliance=0.001, # 1 mA gate complience
         stop_on_error=True,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
@@ -342,11 +344,13 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         logging.info(f"v_sub = {v_sub}")
         logging.info(f"negate_id = {negate_id}")
         logging.info(f"sweep_direction = {sweep_direction}")
-        logging.info(f"smu_slots = {smu_slots}")
+        logging.info(f"id_compliance = {id_compliance}")
+        logging.info(f"ig_compliance = {ig_compliance}")
         logging.info(f"pulsed = {pulsed}")
         if pulsed:
             logging.info(f"pulse_width = {pulse_width}")
             logging.info(f"pulse_period = {pulse_period}")
+        logging.info(f"smu_slots = {smu_slots}")
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
@@ -394,9 +398,7 @@ class ProgramKeysightIdVgs(MeasurementProgram):
         time_i_s_out = np.full(data_shape, np.nan)
         time_i_g_out = np.full(data_shape, np.nan)
 
-        # measurement compliance settings
-        id_compliance = 0.100 # 100 mA complience
-        ig_compliance = 0.010 # 10 mA complience
+        # measurement compliance derived settings
         pow_compliance = 2 * abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W]
         
         # standard keysight initialization for IV measurements
@@ -658,6 +660,8 @@ class ProgramKeysightIdVds(MeasurementProgram):
         v_sub=0.0,
         negate_id=True,
         sweep_direction="fr",
+        id_compliance=0.010, # 10 mA drain complience
+        ig_compliance=0.001, # 1 mA gate complience
         stop_on_error=False,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
@@ -676,10 +680,13 @@ class ProgramKeysightIdVds(MeasurementProgram):
         logging.info(f"v_sub = {v_sub}")
         logging.info(f"negate_id = {negate_id}")
         logging.info(f"sweep_direction = {sweep_direction}")
+        logging.info(f"id_compliance = {id_compliance}")
+        logging.info(f"ig_compliance = {ig_compliance}")
         logging.info(f"pulsed = {pulsed}")
         if pulsed:
             logging.info(f"pulse_width = {pulse_width}")
             logging.info(f"pulse_period = {pulse_period}")
+        logging.info(f"smu_slots = {smu_slots}")
         
         if instr_b1500 is None:
             raise ValueError("Invalid instrument b1500 is None")
@@ -728,8 +735,6 @@ class ProgramKeysightIdVds(MeasurementProgram):
         time_i_g_out = np.full(data_shape, np.nan)
 
         # measurement compliance settings
-        id_compliance = 0.1 # 100 mA complience
-        ig_compliance = 0.01 # 1 mA complience
         pow_compliance = 2 * abs(id_compliance * np.max(np.abs(v_ds_range))) # power compliance [W], added some margin
 
         # standard keysight initialization for IV measurements

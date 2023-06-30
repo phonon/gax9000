@@ -84,7 +84,7 @@ See:
 https://security.stackexchange.com/questions/74345/provide-subjectaltname-to-openssl-directly-on-the-command-line/198409#198409
 
 The `run.sh` or `run.bat` script will generate a certificate file in 
-`data/ssl/cert.pem`. On windows, you will need to go into Certificates
+`settings/ssl/cert.pem`. On windows, you will need to go into Certificates
 and add `cert.pem` as a Trusted Root Certificate for local testing.
 
 In Windows, go to
