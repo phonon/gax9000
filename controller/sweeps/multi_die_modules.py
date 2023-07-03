@@ -11,10 +11,10 @@ class SweepMultiDieModules(MeasurementSweep):
     coordinate, run an array sweep.
     """
     
-    name = "multi_die_array"
+    name = "multi_die_modules"
     
     def __repr__(self) -> str:
-        return "SweepMultiDieArray"
+        return "SweepMultiDieModules"
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -182,11 +182,7 @@ class SweepMultiDieModules(MeasurementSweep):
                     current_die_x = die_x
                     current_die_y = die_y
 
-                    gevent.sleep(0.5) # ensure small delay
-
-                    # move contacts back down to contact device
-                    instr_cascade.move_to_contact_height_with_offset(dz)
-            
+            # move to each module and probe
             for module_name in sweep:
                 module = modules[module_name]
 
@@ -195,7 +191,9 @@ class SweepMultiDieModules(MeasurementSweep):
                 y_module = module["y"]
                 
                 if instr_cascade is not None:
+                    instr_cascade.move_contacts_up()
                     instr_cascade.move_chuck_relative_to_home(x=x_module, y=y_module)
+                    instr_cascade.move_to_contact_height_with_offset(dz)
                 
                 run_inner(
                     die_x=die_x,
