@@ -70,6 +70,7 @@ class ModuleMeasurement:
 
 def merge_multidie_module_data(
     path: str,
+    program: str = "keysight_id_vgs",
 ):
     import numpy as np
     import os
@@ -104,7 +105,7 @@ def merge_multidie_module_data(
             num_devices = len(measurements)
 
             # load first measurement to find data shape
-            data0 = import_hdf5(os.path.join(path_die, measurements[0].filename, "keysight_id_vgs.h5"))
+            data0 = import_hdf5(os.path.join(path_die, measurements[0].filename, f"{program}.h5"))
             data_shape = data0["i_d"].shape
 
             # make merged data for all keys (i_d, v_gs, v_ds, etc.)
@@ -121,7 +122,7 @@ def merge_multidie_module_data(
                     data_merged[k] = v
             
             for i, measured in enumerate(measurements[1:]): # insert rest of data
-                data_i = import_hdf5(os.path.join(path_die, measured.filename, "keysight_id_vgs.h5"))
+                data_i = import_hdf5(os.path.join(path_die, measured.filename, f"{program}.h5"))
                 for k, v in data_i.items():
                     if type(v) is np.ndarray and len(v.shape) > 1:
                         data_merged[k][i,:] = v
@@ -143,12 +144,23 @@ if __name__ == "__main__":
         help="Folder with multidie data files (die_x_0_y_0, die_x_1_y_0, etc.)"
     )
 
+    parser.add_argument(
+        "--program",
+        metavar="program",
+        type=str,
+        default="keysight_id_vgs",
+        help="Measurement program type name, e.g. keysight_id_vgs or keysight_id_vds"
+    )
+
     args = parser.parse_args()
 
     path = args.path
+    program = args.program
 
     print(f"PATH: f{path}")
+    print(f"PROGRAM TYPE: f{program}")
 
     merge_multidie_module_data(
         path=path,
+        program=program,
     )
