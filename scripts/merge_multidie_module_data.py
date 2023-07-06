@@ -113,15 +113,15 @@ def merge_multidie_module_data(
             for k, v in data0.items():
                 if type(v) is np.ndarray:
                     if len(v.shape) > 1:
-                        # alloc new array for all files, fill first row
+                        # alloc new array for all files, will be filled later
                         data_merged[k] = np.full((num_devices, data_shape[0], data_shape[1], data_shape[2]), np.nan)
-                        data_merged[k][0,:] = v
                     else: # common properties
                         data_merged[k] = v
                 else:
                     data_merged[k] = v
             
-            for i, measured in enumerate(measurements[1:]): # insert rest of data
+            # insert numpy array data into merged arrays
+            for i, measured in enumerate(measurements):
                 data_i = import_hdf5(os.path.join(path_die, measured.filename, f"{program}.h5"))
                 for k, v in data_i.items():
                     if type(v) is np.ndarray and len(v.shape) > 1:
