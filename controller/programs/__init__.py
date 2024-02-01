@@ -18,6 +18,7 @@ MEASUREMENT_PROGRAMS = [
     "keysight_id_vgs",
     "keysight_id_vds_pulsed_dc",
     "keysight_id_vgs_pulsed_dc",
+    "keysight_cmos_vout_vin",
     "keysight_rram_1t1r",
     "keysight_rram_1t1r_sweep",
     "keysight_rram_1t1r_sequence",
@@ -98,6 +99,9 @@ class MeasurementProgram(ABC):
         elif s == "keysight_id_vgs_pulsed_dc":
             from controller.programs.keysight_fet_iv import ProgramKeysightIdVgsPulsedDC
             return ProgramKeysightIdVgsPulsedDC
+        elif s == "keysight_cmos_vout_vin":
+            from controller.programs.keysight_cmos import ProgramKeysightCmosVoutVin
+            return ProgramKeysightCmosVoutVin
         elif s == "keysight_rram_1t1r":
             from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1R
             return ProgramKeysightRram1T1R
@@ -145,7 +149,7 @@ class SweepType(Enum):
         The Vds is stepped at a constant bias on each step,
         while Vgs is sweeped in a separate WV staircase measurement.
         
-        Vgs
+           Vgs
             |          Measurement points
             |            |   |   |   |
             |            v   v   v   v
