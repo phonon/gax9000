@@ -75,6 +75,7 @@ def measurement_keysight_b1500_setup_cmos(
     id_compliance: float,
     ig_compliance: float,
     pow_compliance: float,
+    range_mode_v: float,
 ):
     """Standard shared setup for FET IV measurements.
     """
@@ -83,18 +84,17 @@ def measurement_keysight_b1500_setup_cmos(
     instr_b1500.query("ERRX?") # clear any existing error message and ignore
 
     all_probes_str = f"{probe_sub},{probe_vdd},{probe_vss},{probe_out},{probe_a}"
-    if num_inputs == 2:
-        all_probes_str += f",{probe_b}"
-
-    # enable channels: CN (pg 4-62)
-    cn_str = f"CN {probe_sub},{probe_vdd},{probe_vss},{probe_out},{probe_a}"
     if num_inputs == 1:
         input_probes = [probe_a,]
     elif num_inputs == 2:
         input_probes = [probe_a, probe_b]
-        cn_str += f",{probe_b}"
+        all_probes_str += f",{probe_b}"
     else:
-        raise ValueError(f"Invalid num_input = {num_inputs}, must be 1 or 2")
+        raise ValueError(f"Invalid num_inputs = {num_inputs}, must be 1 or 2")
+
+    # enable channels: CN (pg 4-62)
+    cn_str = f"CN {all_probes_str}"
+    print(cn_str)
     instr_b1500.write(cn_str)
     query_error(instr_b1500)
 
@@ -158,6 +158,12 @@ def measurement_keysight_b1500_setup_cmos(
         instr_b1500.write(f"DV {probe},0,0,{ig_compliance}")
         print(f"DV {probe},0,0,{ig_compliance}")
         query_error(instr_b1500)
+    
+    # outputs: force 0 A
+    vout_compliance = 10 # 10 V?
+    instr_b1500.write(f"DI {probe_out},0,0,{vout_compliance}")
+    print(f"DI {probe_out},0,0,{vout_compliance}")
+    query_error(instr_b1500)
 
     # set measurement mode to multi-channel staircase sweep (MODE = 16) (4-151, pg 471):
     # MM mode,ch0,ch1,ch2,...
@@ -201,7 +207,6 @@ def measurement_keysight_b1500_setup_cmos(
     query_error(instr_b1500)
 
     # set output voltage measurement range mode
-    range_mode_v = 50
     instr_b1500.write(f"RV {probe_out},{range_mode_v}")
     query_error(instr_b1500)
 
@@ -284,14 +289,15 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
             probe_vdd = 4
             probe_vss = 5
             probe_sub = 9
-            num_input = 1
+            num_inputs = 1
             v_a = { start = 0, stop = 1.2, step = 0.1 }
             v_b = 0
             v_dd = 1.2
             v_ss = 0.0
             v_sub = 0.0
-            negate_id = true
+            negate_id = false
             sweep_direction = "fr"
+            range_mode_v = 10
         """
 
     def run(
@@ -305,7 +311,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
         probe_vdd = 4,
         probe_vss = 5,
         probe_sub = 9,
-        num_input = 1,
+        num_inputs = 1,
         v_a={
             "start": -1.2,
             "stop": 1.2,
@@ -318,6 +324,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
         sweep_direction="fr",
         id_compliance=0.010, # 10 mA drain complience
         ig_compliance=0.001, # 1 mA gate complience
+        range_mode_v=20, # range mode for output voltage measurement
         stop_on_error=True,
         yield_during_measurement=True,
         smu_slots={}, # map SMU number => actual slot number
@@ -330,6 +337,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
         logging.info(f"probe_vdd = {probe_vdd}")
         logging.info(f"probe_vss = {probe_vss}")
         logging.info(f"probe_sub = {probe_sub}")
+        logging.info(f"num_inputs = {num_inputs}")
         logging.info(f"v_a = {v_a}")
         logging.info(f"v_b = {v_b}")
         logging.info(f"v_dd = {v_dd}")
@@ -378,20 +386,24 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
         # so that only one of these is swept and the other is constant
         # - verify ranges and ensure that only one input is swept (e.g. len > 0)
         # - choose longer vector as 'input_sweep' and the other as 'input_const'
-        if num_input == 1:
+        if num_inputs == 1:
             if len(v_a_range) <= 1:
                 raise ValueError(f"Invalid v_a_range = {v_a_range}, must have more than one value")
             in_sweep, probe_sweep, v_sweep = "v_a", probe_a, v_a_range
             in_const, probe_const, v_const_values = "", None, [0.0] # fake sentinel for other inputs
             # list of all probe inputs
             probes_in = [probe_a]
-        if num_input == 2:
+            # number of read values in chunk
+            read_values = 11
+        elif num_inputs == 2:
             if len(v_a_range) <= 1 and len(v_b_range) <= 1:
                 raise ValueError(f"Invalid v_a_range = {v_a_range} and v_b_range = {v_b_range}, must have more than one value")
-            elif len(v_a_range) > 1 and len(v_b_range) > 1:
-                raise ValueError(f"Invalid v_a_range = {v_a_range} and v_b_range = {v_b_range}, only one can be swept")
+            elif len(v_a_range) == len(v_b_range):
+                raise ValueError(f"Invalid v_a_range = {v_a_range} and v_b_range = {v_b_range}, one must be a larger sweep than other")
             # list of all probe inputs
             probes_in = [probe_a, probe_b]
+            # number of read values in chunk
+            read_values = 13
 
             # choose longer vector as sweep
             if len(v_a_range) > len(v_b_range):
@@ -401,7 +413,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
                 in_sweep, probe_sweep, v_sweep = "v_b", probe_b, v_b_range
                 in_const, probe_const, v_const_values = "v_a", probe_a, v_a_range
         else:
-            raise ValueError(f"Invalid num_input = {num_input}, must be 1 or 2")
+            raise ValueError(f"Invalid num_inputs = {num_inputs}, must be 1 or 2")
         
         # maps string of sweep directions like "frf" => list of [SweepType.FORWARD_REVERSE, SweepType.FORWARD]
         sweeps = SweepType.parse_string(sweep_direction)
@@ -431,6 +443,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
         measurement_keysight_b1500_setup_cmos(
             instr_b1500=instr_b1500,
             query_error=query_error,
+            num_inputs=num_inputs,
             probe_a=probe_a,
             probe_b=probe_b,
             probe_out=probe_out,
@@ -440,6 +453,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
             id_compliance=id_compliance,
             ig_compliance=ig_compliance,
             pow_compliance=pow_compliance,
+            range_mode_v=range_mode_v,
         )
 
         # ===========================================================
@@ -485,7 +499,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
                 query_error(instr_b1500)
                 
                 # write other constant input bias
-                if num_input == 2:
+                if num_inputs == 2:
                     instr_b1500.write(f"DV {probe_const},0,{v_in_const},{ig_compliance}")
                     query_error(instr_b1500)
                 
@@ -531,7 +545,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
 
                 # values chunked for each measurement point:
                 #   [ [vout, i_dd, i_ss, ig_a, ig_b, v_in0] , [vout, i_dd, i_ss, ig_a, ig_b, v_in0] , ... ]
-                val_chunks = [ x for x in iter_chunks(vals, 11) ]
+                val_chunks = [ x for x in iter_chunks(vals, read_values) ]
                 print(val_chunks)
 
                 # split val chunks into forward/reverse sweep components:
@@ -541,34 +555,38 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
                     sweep_chunks = [val_chunks[0:num_points], val_chunks[num_points:]]
                 
                 # indices for each val (note values come as pair 't,value')
-                idx_v_out = 1
+                idx_v_out = 7
                 idx_i_dd = 3
                 idx_i_ss = 5
-                idx_i_a = 7
-                if num_input == 2:
+                idx_i_a = 1
+                if num_inputs == 2:
                     idx_i_b = 9
-                    idx_v_sweep = 10
+                    idx_v_sweep = 12
                 else:
-                    idx_v_sweep = 8
+                    idx_v_sweep = 10
                 
                 val_table = [] # values to print out to console for display
 
                 for s, sweep_vals in enumerate(sweep_chunks):
                     for i, vals_chunk in enumerate(sweep_vals):
-                        val_table.append([v_dd, v_ss, v_a, v_b, vals_chunk[idx_v_out], vals_chunk[idx_i_dd], vals_chunk[idx_i_ss], vals_chunk[idx_i_a], vals_chunk[idx_i_b]])
 
                         v_out_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_v_out]
                         i_dd_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_i_dd]
                         i_ss_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_i_ss]
                         v_a_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_v_sweep] if in_sweep == "v_a" else v_in_const
                         i_a_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_i_a]
-                        if num_input == 2:
+                        if num_inputs == 1:
+                            v_b_read = None
+                        if num_inputs == 2:
+                            v_b_read = vals_chunk[idx_i_b]
                             v_b_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_v_sweep] if in_sweep == "v_b" else v_in_const
-                            i_b_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_i_b]
+                            i_b_out[idx_in_const, idx_dir + s, i] = v_b_read
                         # timestamps
                         time_v_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_v_out-1]
                         time_i_dd_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_i_dd-1]
                         time_i_dd_out[idx_in_const, idx_dir + s, i] = vals_chunk[idx_i_ss-1]
+                        
+                        val_table.append([v_dd, v_ss, v_a_out[idx_in_const, idx_dir + s, i], v_b_out[idx_in_const, idx_dir + s, i], vals_chunk[idx_v_out], vals_chunk[idx_i_dd], vals_chunk[idx_i_ss], vals_chunk[idx_i_a], v_b_read])
                 
                 print(tabulate(val_table, headers=["v_dd [V]", "v_ss [V]", "v_a [V]", "v_b [V]", "v_out [V]", "i_dd [A]", "i_ss [A]", "i_ga [A]", "i_gb [A]"]))
 
@@ -581,7 +599,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
                 def task_update_program_status():
                     """Update program status."""
                     data={
-                        "inputs": num_input,
+                        "inputs": num_inputs,
                         "in_sweep": in_sweep,
                         "in_const": in_const,
                         "v_dd": v_dd,
@@ -596,7 +614,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
                         "v_a": v_a_out,
                         "i_a": np.abs(i_a_out), # abs for easier plotting
                     }
-                    if num_input == 2:
+                    if num_inputs == 2:
                         data["v_b"] = v_b_out
                         data["i_a"] = i_b_out
                     data_cleaned = dict_np_array_to_json_array(data) # converts np ndarrays to regular lists and replace nan
@@ -625,7 +643,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
         instr_b1500.write(f"DZ")
 
         data_out = {
-            "inputs": num_input,
+            "inputs": num_inputs,
             "in_sweep": in_sweep,
             "in_const": in_const,
             "v_dd": v_dd,
@@ -640,7 +658,7 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
             "v_a": v_a_out,
             "i_a": i_a_out,
         }
-        if num_input == 2:
+        if num_inputs == 2:
             data_out["v_b"] = v_b_out
             data_out["i_b"] = i_b_out
 

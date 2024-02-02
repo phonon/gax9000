@@ -28,7 +28,7 @@ export const ProgramCMOSVoutVin = ({
     const tracesIgVin = [];  // input gate currents vs Vin sweep
 
     // key properties to display in data table
-    // TODO: currently nothing to show
+    const vConstList = []; // non-input vconst values in each sweep
 
     let sequenceStepNames = undefined; 
 
@@ -53,8 +53,6 @@ export const ProgramCMOSVoutVin = ({
         console.log(`numConstInputs=${numConstInputs}, numDirections=${numDirections}, numPoints=${numPoints}`);
 
         for ( let i = 0; i < numConstInputs; i++ ) {
-            // number of points for this sequence
-            const n = sequenceNumPoints[i];
 
             // base color based on vds bias (note, color [vmin, vmax] range expanded to make colors nicer)
             const colBase = colorTo255Range(colormap(i, -1, numConstInputs));
@@ -64,16 +62,18 @@ export const ProgramCMOSVoutVin = ({
                 const col = colorBrighten(colBase, 0.6 + (d * 0.4));
 
                 // unpack data
-                const va = data.v_a[i][d].slice(0, n);
-                const vb = "v_b" in data ? data.v_b[i][d].slice(0, n) : undefined;
-                const vout = data.v_out[i][d].slice(0, n);
-                const idd = data.i_dd[i][d].slice(0, n);
-                const ia = data.i_a[i][d].slice(0, n);
-                const ib = data.i_b[i][d].slice(0, n);
+                const va = data.v_a[i][d];
+                const ia = data.i_a[i][d];
+                const vb = "v_b" in data ? data.v_b[i][d] : 0;
+                const ib = "i_b" in data ? data.i_b[i][d] : 0;
+                const vout = data.v_out[i][d];
+                const idd = data.i_dd[i][d];
 
                 // determine vin being swept and other input being constant
                 const vin = ( inSweep === "v_a" ) ? va : vb;
                 const vconst = ( inSweep === "v_a" ) ? vb : va;
+
+                vConstList.push(vconst);
 
                 // create plot traces
                 tracesVoutVin.push({
@@ -143,9 +143,9 @@ export const ProgramCMOSVoutVin = ({
                     <Table size="small" aria-label="metrics table">
                         <TableHead>
                             <TableRow>
-                                <TableCell>Step</TableCell>
-                                {sequenceStepNames.map((step, i) =>
-                                    <TableCell key={i}>{step}</TableCell>
+                                <TableCell>V Other</TableCell>
+                                {vConstList.map((v, i) =>
+                                    <TableCell key={i}>{v}</TableCell>
                                 )}
                             </TableRow>
                         </TableHead>
