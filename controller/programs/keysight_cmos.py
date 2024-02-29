@@ -503,6 +503,12 @@ class ProgramKeysightCmosVoutVin(MeasurementProgram):
                     instr_b1500.write(f"DV {probe_const},0,{v_in_const},{ig_compliance}")
                     query_error(instr_b1500)
                 
+                # outputs: force 0 A
+                vout_compliance = 10 # 10 V?
+                instr_b1500.write(f"DI {probe_out},0,0,{vout_compliance}")
+                print(f"DI {probe_out},0,0,{vout_compliance}")
+                query_error(instr_b1500)
+                
                 # execute and wait for data response
                 instr_b1500.write("XE")
 

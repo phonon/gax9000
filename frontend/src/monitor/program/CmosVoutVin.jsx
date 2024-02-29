@@ -64,20 +64,20 @@ export const ProgramCMOSVoutVin = ({
                 // unpack data
                 const va = data.v_a[i][d];
                 const ia = data.i_a[i][d];
-                const vb = "v_b" in data ? data.v_b[i][d] : 0;
-                const ib = "i_b" in data ? data.i_b[i][d] : 0;
+                const vb = "v_b" in data ? data.v_b[i][d] : [0];
+                const ib = "i_b" in data ? data.i_b[i][d] : [0];
                 const vout = data.v_out[i][d];
                 const idd = data.i_dd[i][d];
 
                 // determine vin being swept and other input being constant
                 const vin = ( inSweep === "v_a" ) ? va : vb;
-                const vconst = ( inSweep === "v_a" ) ? vb : va;
+                const vconst = ( inSweep === "v_a" ) ? vb[i] : va[i];
 
                 vConstList.push(vconst);
 
                 // create plot traces
                 tracesVoutVin.push({
-                    name: `vout, dir=${d}`,
+                    name: `vout (v2 = ${vconst}, dir=${d})`,
                     x: vin,
                     y: vout,
                     type: "scatter",
@@ -87,7 +87,7 @@ export const ProgramCMOSVoutVin = ({
 
                 // supply current
                 tracesIddVin.push({
-                    name: `idd, dir=${d}`,
+                    name: `idd, (v2 = ${vconst}, dir=${d})`,
                     x: vin,
                     y: idd,
                     type: "scatter",
@@ -97,7 +97,7 @@ export const ProgramCMOSVoutVin = ({
                 
                 // input gate currents
                 tracesIgVin.push({
-                    name: `ia, dir=${d}`,
+                    name: `ia, (v2 = ${vconst}, dir=${d})`,
                     x: vin,
                     y: ia,
                     type: "scatter",
@@ -106,7 +106,7 @@ export const ProgramCMOSVoutVin = ({
                 });
                 if ( numInputs == 2 ) {
                     tracesIgVin.push({
-                        name: `ib, dir=${d}`,
+                        name: `ib, (v2 = ${vconst}, dir=${d})`,
                         x: vin,
                         y: ib,
                         type: "scatter",
