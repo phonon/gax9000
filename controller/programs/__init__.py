@@ -6,7 +6,7 @@ import logging
 import tomli
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import Iterator, Tuple
+from typing import Iterator
 # TODO: in future python 3.11, we can import "from typing import Self" for type hint
 
 
@@ -22,6 +22,7 @@ MEASUREMENT_PROGRAMS = [
     "keysight_rram_1t1r",
     "keysight_rram_1t1r_sweep",
     "keysight_rram_1t1r_sequence",
+    "keysight_iv_2term_sequence",
 ]
 
 class MeasurementResult():
@@ -55,10 +56,11 @@ class MeasurementProgram(ABC):
         """Return default `run` arguments config as a toml string."""
         return ""
     
-    def default_config(self) -> dict:
+    @classmethod
+    def default_config(cls) -> dict:
         """Return default `run` arguments config as a dict. Returns and
         parses this class's default config string as toml."""
-        return tomli.loads(self.__class__.default_config_string())
+        return tomli.loads(cls.default_config_string())
     
     @staticmethod
     @abstractmethod
@@ -111,6 +113,9 @@ class MeasurementProgram(ABC):
         elif s == "keysight_rram_1t1r_sequence":
             from controller.programs.keysight_rram_1t1r import ProgramKeysightRram1T1RSequence
             return ProgramKeysightRram1T1RSequence
+        elif s == "keysight_iv_2term_sequence":
+            from controller.programs.keysight_iv2term import ProgramKeysightIV2TermSequence
+            return ProgramKeysightIV2TermSequence
         else:
             logging.error(f"Unknown program type: {name}")
             return None
@@ -253,7 +258,7 @@ class SweepType(Enum):
         ]
 
     @staticmethod
-    def parse_string(s: str):
+    def parse_string(s: str) -> list:
         """Maps string of sweep directions like "frf" into a list of SweepType:
             "frf" => [SweepType.FORWARD_REVERSE, SweepType.FORWARD]
         This must iterate through string and pattern match up to 2 characters
@@ -267,7 +272,7 @@ class SweepType(Enum):
         idx = 0
         slen = len(s)
         while idx < slen:
-            print(f"idx={idx}, slen={slen}")
+            # print(f"idx={idx}, slen={slen}") ### debug
             if idx < slen-1: # match 2 chars
                 pattern = s[idx:idx+2]
                 if pattern == "ff":
@@ -314,7 +319,7 @@ class SweepType(Enum):
         return count
     
     @staticmethod
-    def iter_with_sweep_index(sweeps: list) -> Iterator[Tuple[int, SweepType]]:
+    def iter_with_sweep_index(sweeps: list) -> Iterator[tuple[int, SweepType]]:
         """Create iterator that yields running sweep index,
         where ForwardReverse and ReverseForward iterate the index
         by 2 (since they are composed of two sweeps).
@@ -329,6 +334,15 @@ class SweepType(Enum):
                 i += 2
             else:
                 raise ValueError(f"Invalid SweepType: {s}")
+    
+    def size(self):
+        """Return number of sweeps for this SweepType."""
+        if self == SweepType.FORWARD or self == SweepType.REVERSE:
+            return 1
+        elif self == SweepType.FORWARD_REVERSE or self == SweepType.REVERSE_FORWARD:
+            return 2
+        else:
+            raise ValueError(f"Invalid SweepType: {self}")
 
 if __name__ == "__main__":
     sweeps = SweepType.parse_string("frffr")
