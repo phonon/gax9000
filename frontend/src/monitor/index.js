@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ProgramDebug, ProgramIdVds, ProgramIdVgs, ProgramCMOSVoutVin, ProgramRram1T1R, ProgramUnknown } from "./program.js";
+import { ProgramDebug, ProgramIdVds, ProgramIdVgs, ProgramIV2Term, ProgramCMOSVoutVin, ProgramRram1T1R, ProgramUnknown } from "./program.js";
 
 // route program name => render program jsx
 const renderPrograms = new Map();
@@ -10,6 +10,7 @@ renderPrograms.set("keysight_id_vds", ProgramIdVds);
 renderPrograms.set("keysight_id_vds_pulsed_dc", ProgramIdVds);
 renderPrograms.set("keysight_id_vgs", ProgramIdVgs);
 renderPrograms.set("keysight_id_vgs_pulsed_dc", ProgramIdVgs);
+renderPrograms.set("keysight_iv_2term_sequence", ProgramIV2Term);
 renderPrograms.set("keysight_cmos_vout_vin", ProgramCMOSVoutVin);
 renderPrograms.set("keysight_rram_1t1r", ProgramRram1T1R);
 renderPrograms.set("keysight_rram_1t1r_sweep", ProgramRram1T1R);

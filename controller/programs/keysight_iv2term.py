@@ -27,7 +27,6 @@ def measurement_keysight_b1500_setup(
     probe_b: int,
     probe_sub: int,
     i_compliance: float,
-    pow_compliance: float,
     range_mode: str = "1na",
     adc_type: str = "hispeed",
     adc_mode: str = "auto",
@@ -88,7 +87,7 @@ def measurement_keysight_b1500_setup(
         "measurement_time": 3,
     }
     adc_mode_int = ADC_HISPEED_MODES[adc_mode.lower()]
-    instr_b1500.write(f"AIT {adc_type},{adc_mode_int},{adc_sampling_coeff}")
+    instr_b1500.write(f"AIT {adc_type_int},{adc_mode_int},{adc_sampling_coeff}")
     query_error(instr_b1500)
 
     # zero voltage to probes, DV (pg 4-78) cmd sets DC voltage on channels:
@@ -356,7 +355,7 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
 
             [code.neg1fr]
             pattern = "fr"
-            v_t = { start = 0.0, stop = 1.0, step = 0.1 }
+            v_t = { start = 0.0, stop = -1.0, step = 0.1 }
             v_b = 0.0
             
             [code.pos5fr]
@@ -366,7 +365,7 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
 
             [code.neg5fr]
             pattern = "frfrfrfrfr"
-            v_t = { start = 0.0, stop = 1.0, step = 0.1 }
+            v_t = { start = 0.0, stop = -1.0, step = 0.1 }
             v_b = 0.0
 
             ### sweep sequence
@@ -447,8 +446,8 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
 
         # parse sequence into list of individual sweep codes
         sweeps, num_sweeps, num_points = parse_iv2term_sequence(
-            probe_t = 1,
-            probe_b = 2,
+            probe_t = probe_t,
+            probe_b = probe_b,
             code = code,
             sequence = sequence["codes"],
         )
@@ -464,13 +463,14 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
         time_i_t_out = np.full(data_shape, np.nan)
         time_i_b_out = np.full(data_shape, np.nan)
         # number of points in each sweep vector, rest are padded with nan
-        points = np.full(num_sweeps, 1)
+        points_out = np.full((num_sweeps, 1), np.nan)
 
-        # measurement compliance settings
+        # measurement power compliance settings
+        # TODO: currently not used for anything
         if pow_compliance is None:
             v_max = 0
-            for k, val in code.items():
-                v_max = max(v_max, abs(val["v_t"]), abs(val["v_b"]))
+            for x in sweeps:
+                v_max = max(v_max, np.max(np.abs(np.array(x.v_sweep_range))))
             pow_compliance = abs(i_compliance * v_max) # power compliance [W]
 
         # reset instrument
@@ -484,7 +484,6 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
             probe_t=probe_t,
             probe_sub=probe_sub,
             i_compliance=i_compliance,
-            pow_compliance=pow_compliance,
             range_mode=range_mode,
             adc_type=adc_type,
             adc_mode=adc_mode,
@@ -507,14 +506,15 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
             # swept probe tip
             sweep_terminal = sweep.sweep_terminal
             probe_sweep = sweep.probe_sweep
-            v_sweep = sweep.v_sweep
+            v_sweep = sweep.v_sweep_range
+            points_sweep = len(v_sweep)
             # constant bias probe tip
             probe_const = sweep.probe_const
             v_const = sweep.v_const
             idx = sweep.index
 
             print(f"==============================")
-            print(f"Measuring step {idx}/{num_sweeps}")
+            print(f"Measuring step {idx+1}/{num_sweeps}")
             print(f"------------------------------")
             
             # write voltage staircase waveform
@@ -524,12 +524,11 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
                 range=wv_range_mode,
                 start=v_sweep[0],
                 stop=v_sweep[-1],
-                steps=len(v_sweep),
+                steps=points_sweep,
                 icomp=i_compliance,
                 pcomp=None, # can trigger false errors
             )
             instr_b1500.write(cmd)
-
             query_error(instr_b1500)
             
             # write non-swept const probe bias
@@ -571,24 +570,24 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
             
             # number of bytes in output data buffer
             nbytes = int(instr_b1500.query("NUB?"))
-            print(f"nbytes={nbytes}")
+            # print(f"nbytes={nbytes}") # debug
             buf = instr_b1500.read()
-            print(buf)
+            # print(buf) # debug
 
             # parse vals strings into numbers
             vals = buf.strip().split(",")
             vals = parse_keysight_str_values(vals)
 
             # values chunked for each measurement point:
-            #   [ [vgs0, id0, ig0] , [vgs1, id1, ig1], ... ]
+            #   [ [tt0, it0, tb0, ib0, vsw0] , [tt1, it1, tb1, ib1, vsw1], ... ]
             val_chunks = [ x for x in iter_chunks(vals, 5) ]
-            print(val_chunks)
+            # print(val_chunks) # debug
 
             # split val chunks into forward/reverse sweep components:
             if sweep_type == SweepType.FORWARD or sweep_type == SweepType.REVERSE:
                 sweep_chunks = [val_chunks]
             elif sweep_type == SweepType.FORWARD_REVERSE or sweep_type == SweepType.REVERSE_FORWARD:
-                sweep_chunks = [val_chunks[0:num_points], val_chunks[num_points:]]
+                sweep_chunks = [val_chunks[0:points_sweep], val_chunks[points_sweep:]]
             
             val_table = [] # values to print out to console for display
 
@@ -618,13 +617,17 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
                     # timestamps
                     time_i_t_out[idx + s, i] = time_i_t_val
                     time_i_b_out[idx + s, i] = time_i_b_val
+                    # number of voltage sweep points
+                    points_out[idx + s, 0] = points_sweep
             
                     val_table.append([v_t_val, v_b_val, i_t_val, i_b_val])
+            
 
             print(tabulate(val_table, headers=["v_t [V]", "v_b [V]", "i_t [A]", "i_b [A]"]))
 
+            idx_finished = idx + len(sweep_chunks)
             print("------------------------------")
-            print(f"Finished step {idx}/{num_sweeps}")
+            print(f"Finished step {idx_finished+1}/{num_sweeps}")
             print("==============================")
 
             # after each step completes, send partial update
@@ -638,6 +641,7 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
                         "i_b": i_b_out,
                         "time_i_t": time_i_t_out,
                         "time_i_b": time_i_b_out,
+                        "points": points_out,
                     }
                     data_cleaned = dict_np_array_to_json_array(data) # converts np ndarrays to regular lists and replace nan
 
@@ -645,7 +649,7 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
                         "metadata": {
                             "program": ProgramKeysightIV2TermSequence.name,
                             "config": sweep_metadata,
-                            "step": idx,
+                            "step": idx_finished,
                             "step_total": num_sweeps,
                         },
                         "data": data_cleaned,
@@ -674,6 +678,7 @@ class ProgramKeysightIV2TermSequence(MeasurementProgram):
                 "i_b": i_b_out,
                 "time_i_t": time_i_t_out,
                 "time_i_b": time_i_b_out,
+                "points": points_out,
             },
         )
 
